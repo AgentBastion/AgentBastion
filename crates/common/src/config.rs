@@ -39,9 +39,9 @@ impl AppConfig {
             redis_url: std::env::var("REDIS_URL")
                 .unwrap_or_else(|_| "redis://localhost:6379".into()),
             jwt_secret: std::env::var("JWT_SECRET")
-                .unwrap_or_else(|_| "dev-secret-change-in-production".into()),
+                .expect("JWT_SECRET environment variable is required"),
             encryption_key: std::env::var("ENCRYPTION_KEY")
-                .unwrap_or_else(|_| "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".into()),
+                .expect("ENCRYPTION_KEY environment variable is required"),
             server_host: std::env::var("SERVER_HOST")
                 .unwrap_or_else(|_| "0.0.0.0".into()),
             gateway_port: std::env::var("GATEWAY_PORT")
@@ -70,6 +70,12 @@ impl AppConfig {
             oidc_client_secret: std::env::var("OIDC_CLIENT_SECRET").ok(),
             oidc_redirect_url: std::env::var("OIDC_REDIRECT_URL").ok(),
         })
+    }
+
+    pub fn validate(&self) {
+        if self.encryption_key.len() != 64 {
+            panic!("ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)");
+        }
     }
 
     pub fn gateway_addr(&self) -> String {

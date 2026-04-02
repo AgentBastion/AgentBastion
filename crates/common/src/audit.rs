@@ -179,6 +179,15 @@ async fn audit_worker(config: AuditConfig, mut rx: mpsc::Receiver<AuditEntry>) {
     }
 }
 
+fn sanitize_detail(detail: &mut Option<serde_json::Value>) {
+    if let Some(serde_json::Value::Object(map)) = detail {
+        let sensitive_keys = ["password", "secret", "api_key", "token", "authorization", "key_hash"];
+        for key in &sensitive_keys {
+            map.remove(*key);
+        }
+    }
+}
+
 async fn flush_to_quickwit(
     client: &reqwest::Client,
     config: &AuditConfig,
@@ -188,6 +197,11 @@ async fn flush_to_quickwit(
         batch.clear();
         return;
     };
+
+    // Sanitize sensitive fields before sending
+    for entry in batch.iter_mut() {
+        sanitize_detail(&mut entry.detail);
+    }
 
     // NDJSON format
     let ndjson: String = batch

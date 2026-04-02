@@ -53,6 +53,12 @@ pub async fn require_auth(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
+    // Check JWT blacklist (revoked tokens)
+    let token_hash = agent_bastion_auth::jwt::sha2_hash(token);
+    if agent_bastion_auth::jwt::is_revoked(&state.redis, &token_hash).await {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
     request.extensions_mut().insert(AuthUser { claims });
 
     Ok(next.run(request).await)

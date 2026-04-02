@@ -20,6 +20,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = AppConfig::from_env()?;
+    config.validate();
     tracing::info!("Starting AgentBastion");
 
     let pool = db::create_pool(&config.database_url).await?;

@@ -52,6 +52,7 @@ dependencies = [
  "argon2",
  "axum",
  "chrono",
+ "fred",
  "hex",
  "jsonwebtoken",
  "openidconnect",

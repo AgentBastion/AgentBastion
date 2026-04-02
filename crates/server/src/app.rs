@@ -56,6 +56,10 @@ fn security_layers<S: Clone + Send + Sync + 'static>(router: Router<S>) -> Route
             header::X_FRAME_OPTIONS,
             HeaderValue::from_static("DENY"),
         ))
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::HeaderName::from_static("strict-transport-security"),
+            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+        ))
         .layer(CatchPanicLayer::new())
         .layer(TraceLayer::new_for_http())
 }
@@ -160,6 +164,8 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
     // Signature verification runs on POST/DELETE/PATCH (skipped for GET)
     let user_routes = Router::new()
         .route("/api/auth/me", get(handlers::auth::me))
+        .route("/api/auth/password", post(handlers::auth::change_password))
+        .route("/api/auth/account", delete(handlers::auth::delete_account))
         .route(
             "/api/keys",
             get(handlers::api_keys::list_keys).post(handlers::api_keys::create_key),

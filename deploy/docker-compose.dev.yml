@@ -17,12 +17,13 @@ services:
 
   redis:
     image: redis:8-alpine
+    command: redis-server --requirepass devredispass
     ports:
       - "6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "devredispass", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5

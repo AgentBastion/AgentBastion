@@ -8,8 +8,6 @@ use crate::app::AppState;
 pub async fn health_check() -> Json<Value> {
     Json(json!({
         "status": "ok",
-        "service": "agent-bastion",
-        "version": env!("CARGO_PKG_VERSION"),
     }))
 }
 

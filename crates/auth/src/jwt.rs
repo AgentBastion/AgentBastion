@@ -1,6 +1,7 @@
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -66,6 +67,33 @@ impl JwtManager {
         let token_data = decode::<Claims>(token, &self.decoding_key, &Validation::default())?;
         Ok(token_data.claims)
     }
+}
+
+/// Compute a SHA-256 hex hash of a token (for blacklist keys; never store raw tokens).
+pub fn sha2_hash(token: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+/// Add a token hash to the Redis blacklist with a TTL.
+pub async fn revoke_token(
+    redis: &fred::clients::Client,
+    token_hash: &str,
+    ttl_secs: i64,
+) -> anyhow::Result<()> {
+    use fred::interfaces::KeysInterface;
+    let key = format!("jwt_blacklist:{token_hash}");
+    let _: () = redis.set(&key, "1", None, None, false).await?;
+    let _: () = redis.expire(&key, ttl_secs, None).await?;
+    Ok(())
+}
+
+/// Check whether a token hash has been revoked.
+pub async fn is_revoked(redis: &fred::clients::Client, token_hash: &str) -> bool {
+    use fred::interfaces::KeysInterface;
+    let key = format!("jwt_blacklist:{token_hash}");
+    redis.exists::<u8, _>(&key).await.unwrap_or(0) > 0
 }
 
 #[cfg(test)]

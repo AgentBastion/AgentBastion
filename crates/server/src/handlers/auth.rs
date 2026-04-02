@@ -1,5 +1,6 @@
 use axum::extract::State;
 use axum::Json;
+use serde::Deserialize;
 
 use agent_bastion_auth::password;
 use agent_bastion_common::audit::AuditEntry;
@@ -13,6 +14,12 @@ use crate::middleware::verify_signature;
 
 use crate::app::AppState;
 use crate::middleware::auth_guard::AuthUser;
+
+#[derive(Debug, Deserialize)]
+pub struct ChangePasswordRequest {
+    pub old_password: String,
+    pub new_password: String,
+}
 
 pub async fn login(
     State(state): State<AppState>,
@@ -40,19 +47,34 @@ pub async fn login(
         return Err(AppError::BadRequest("Too many login attempts. Please try again later.".into()));
     }
 
-    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = $1 AND is_active = true")
+    // Constant-time login: always perform Argon2 verify to prevent user enumeration
+    let dummy_hash = "$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+    let maybe_user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = $1 AND is_active = true")
         .bind(&req.email)
         .fetch_optional(&state.db)
-        .await?
-        .ok_or(AppError::Unauthorized)?;
+        .await?;
 
-    let password_hash = user.password_hash.as_ref().ok_or(AppError::BadRequest(
-        "This account uses SSO login".into(),
-    ))?;
+    let (user, password_hash) = match maybe_user {
+        Some(u) => {
+            let hash = u.password_hash.clone().unwrap_or_else(|| dummy_hash.to_string());
+            (Some(u), hash)
+        }
+        None => (None, dummy_hash.to_string()),
+    };
 
-    if !password::verify_password(&req.password, password_hash)? {
+    // Always verify (constant time regardless of user existence)
+    let password_valid = password::verify_password(&req.password, &password_hash).unwrap_or(false);
+
+    if !password_valid || user.is_none() {
+        // Log failed attempt
+        state.audit.log(
+            AuditEntry::new("auth.login_failed")
+                .detail(serde_json::json!({"email": req.email})),
+        );
         return Err(AppError::Unauthorized);
     }
+    let user = user.unwrap(); // Safe: checked above
 
     // Fetch user roles
     let roles: Vec<String> =
@@ -189,4 +211,78 @@ pub async fn me(
         avatar_url: user.avatar_url,
         is_active: user.is_active,
     }))
+}
+
+pub async fn change_password(
+    auth_user: AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<ChangePasswordRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if req.new_password.len() < 8 {
+        return Err(AppError::BadRequest("New password must be at least 8 characters".into()));
+    }
+
+    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
+        .bind(auth_user.claims.sub)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or(AppError::NotFound("User not found".into()))?;
+
+    let current_hash = user.password_hash.as_ref().ok_or(AppError::BadRequest(
+        "This account uses SSO login".into(),
+    ))?;
+
+    if !password::verify_password(&req.old_password, current_hash)? {
+        return Err(AppError::Unauthorized);
+    }
+
+    let new_hash = password::hash_password(&req.new_password)?;
+    sqlx::query("UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2")
+        .bind(&new_hash)
+        .bind(user.id)
+        .execute(&state.db)
+        .await?;
+
+    // Revoke all signing keys for this user (invalidates sessions)
+    let signing_key = format!("signing_key:{}", user.id);
+    let _: Result<(), _> = fred::interfaces::KeysInterface::del::<(), _>(&state.redis, &signing_key).await;
+
+    state.audit.log(
+        AuditEntry::new("auth.password_changed")
+            .user_id(user.id)
+            .resource("auth"),
+    );
+
+    Ok(Json(serde_json::json!({"status": "password_changed"})))
+}
+
+pub async fn delete_account(
+    auth_user: AuthUser,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let user_id = auth_user.claims.sub;
+
+    sqlx::query("DELETE FROM api_keys WHERE user_id = $1")
+        .bind(user_id)
+        .execute(&state.db)
+        .await?;
+    sqlx::query("DELETE FROM user_roles WHERE user_id = $1")
+        .bind(user_id)
+        .execute(&state.db)
+        .await?;
+    sqlx::query("DELETE FROM team_members WHERE user_id = $1")
+        .bind(user_id)
+        .execute(&state.db)
+        .await?;
+    sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(user_id)
+        .execute(&state.db)
+        .await?;
+
+    state.audit.log(
+        AuditEntry::new("user.account_deleted")
+            .user_id(user_id),
+    );
+
+    Ok(Json(serde_json::json!({"status": "deleted"})))
 }

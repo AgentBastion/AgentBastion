@@ -51,6 +51,13 @@ pub struct Registry {
     inner: Arc<RwLock<HashMap<Uuid, RegisteredServer>>>,
 }
 
+/// Validate that a tool name contains only safe characters.
+fn validate_tool_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 255
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+}
+
 impl Registry {
     pub fn new() -> Self {
         Self {
@@ -58,8 +65,9 @@ impl Registry {
         }
     }
 
-    /// Register (or update) a server in the registry.
-    pub async fn register(&self, server: RegisteredServer) {
+    /// Register (or update) a server in the registry. Filters out tools with invalid names.
+    pub async fn register(&self, mut server: RegisteredServer) {
+        server.tools.retain(|t| validate_tool_name(&t.name));
         let mut servers = self.inner.write().await;
         servers.insert(server.id, server);
     }
@@ -91,11 +99,11 @@ impl Registry {
         }
     }
 
-    /// Update the cached tool list for a server.
+    /// Update the cached tool list for a server. Filters out tools with invalid names.
     pub async fn update_tools(&self, id: Uuid, tools: Vec<McpToolInfo>) {
         let mut servers = self.inner.write().await;
         if let Some(server) = servers.get_mut(&id) {
-            server.tools = tools;
+            server.tools = tools.into_iter().filter(|t| validate_tool_name(&t.name)).collect();
         }
     }
 
