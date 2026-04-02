@@ -1,0 +1,20 @@
+[package]
+name = "agent-bastion-mcp-gateway"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+agent-bastion-common = { workspace = true }
+agent-bastion-auth = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }

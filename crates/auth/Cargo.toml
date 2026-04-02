@@ -1,0 +1,23 @@
+[package]
+name = "agent-bastion-auth"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+agent-bastion-common = { workspace = true }
+jsonwebtoken = { workspace = true }
+argon2 = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+axum = { workspace = true }
+sqlx = { workspace = true }
+openidconnect = { workspace = true }
+tokio = { workspace = true }

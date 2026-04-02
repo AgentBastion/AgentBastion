@@ -1,0 +1,13 @@
+target/
+web/node_modules/
+web/dist/
+.git/
+.github/
+.env
+.env.*
+!.env.example
+*.md
+docs/
+.claude/
+.vscode/
+.idea/

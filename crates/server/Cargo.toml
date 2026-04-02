@@ -1,0 +1,32 @@
+[package]
+name = "agent-bastion-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+agent-bastion-common = { workspace = true }
+agent-bastion-auth = { workspace = true }
+agent-bastion-gateway = { workspace = true }
+agent-bastion-mcp-gateway = { workspace = true }
+axum = { workspace = true }
+axum-extra = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tokio = { workspace = true }
+sqlx = { workspace = true }
+fred = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+dotenvy = { workspace = true }
+utoipa = { workspace = true }
+utoipa-axum = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+openidconnect = { workspace = true }
+rust_decimal = { workspace = true }
+reqwest = { workspace = true }

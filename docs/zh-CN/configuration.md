@@ -1,0 +1,380 @@
+**[English](../en/configuration.md) | [中文](../zh-CN/configuration.md)**
+
+# AgentBastion 配置参考
+
+本文档提供 AgentBastion 所有配置选项的完整参考。配置完全通过环境变量管理。
+
+---
+
+## 环境变量
+
+### 数据库
+
+#### `DATABASE_URL`
+
+| 属性      | 值                                                         |
+| --------- | ---------------------------------------------------------- |
+| 必填      | 是                                                         |
+| 默认值    | —                                                          |
+| 示例      | `postgres://agentbastion:password@localhost:5432/agentbastion` |
+
+PostgreSQL 连接字符串。AgentBastion 需要 PostgreSQL 15 或更高版本。
+
+**安全说明：**
+- 在生产环境中，使用 `sslmode=require` 强制加密连接：`postgres://user:pass@host:5432/db?sslmode=require`
+- 避免在提交到版本控制的 URL 中嵌入密码。请使用密钥管理器。
+- 数据库用户需要创建表的权限（用于迁移），或者应单独应用迁移。
+
+---
+
+#### `REDIS_URL`
+
+| 属性      | 值                                       |
+| --------- | ---------------------------------------- |
+| 必填      | 是                                       |
+| 默认值    | —                                        |
+| 示例      | `redis://localhost:6379`                 |
+
+Redis 连接字符串。用于速率限制、OIDC 状态/nonce 存储和会话管理。
+
+**安全说明：**
+- 在生产环境中，启用 Redis 认证：`redis://:yourpassword@host:6379`
+- 对于启用了 TLS 的 Redis，使用 `rediss://` 协议：`rediss://:password@host:6380`
+
+---
+
+### 密码学
+
+#### `JWT_SECRET`
+
+| 属性      | 值                                                 |
+| --------- | -------------------------------------------------- |
+| 必填      | 是                                                 |
+| 默认值    | —                                                  |
+| 示例      | `a3f8c1e0b9d74...`（64 字符十六进制字符串）        |
+
+用于 HS256 JWT 签名和验证的共享密钥。必须至少为 256 位（32 字节 / 64 个十六进制字符）以确保足够的安全性。
+
+**安全说明：**
+- 使用以下命令生成：`openssl rand -hex 32`
+- 更改此值会使所有活跃的访问令牌和刷新令牌失效，迫使所有用户重新认证。
+- 切勿在不同环境（开发/预发布/生产）之间重用此值。
+- 存储在密钥管理器中，而非明文文件。
+
+---
+
+#### `ENCRYPTION_KEY`
+
+| 属性      | 值                                                 |
+| --------- | -------------------------------------------------- |
+| 必填      | 是                                                 |
+| 默认值    | —                                                  |
+| 示例      | `b7e4d219f0c83...`（64 字符十六进制字符串）        |
+
+256 位密钥（32 字节，编码为 64 个十六进制字符），用于敏感数据的 AES-256-GCM 静态加密（提供商 API 密钥、MCP 服务器认证密钥）。
+
+**安全说明：**
+- 使用以下命令生成：`openssl rand -hex 32`
+- 更改此值会使所有先前加密的数据（提供商 API 密钥、MCP 认证密钥）不可读。轮换后必须重新输入这些值。
+- 这是系统中最关键的密钥。此密钥泄露将暴露所有存储的提供商凭证。
+- 在生产环境中存储在硬件安全模块（HSM）或密钥管理器中。
+
+---
+
+### 服务器
+
+#### `SERVER_HOST`
+
+| 属性      | 值              |
+| --------- | --------------- |
+| 必填      | 否              |
+| 默认值    | `0.0.0.0`      |
+| 示例      | `127.0.0.1`    |
+
+服务器绑定的 IP 地址。使用 `0.0.0.0` 监听所有接口，或使用 `127.0.0.1` 仅限本地访问。
+
+---
+
+#### `GATEWAY_PORT`
+
+| 属性      | 值     |
+| --------- | ------ |
+| 必填      | 否     |
+| 默认值    | `3000` |
+| 示例      | `8080` |
+
+网关服务器的 TCP 端口（OpenAI 兼容 API 和 MCP 传输）。
+
+---
+
+#### `CONSOLE_PORT`
+
+| 属性      | 值     |
+| --------- | ------ |
+| 必填      | 否     |
+| 默认值    | `3001` |
+| 示例      | `8081` |
+
+控制台服务器的 TCP 端口（管理 API 和管理员端点）。
+
+---
+
+#### `CORS_ORIGINS`
+
+| 属性      | 值                                       |
+| --------- | ---------------------------------------- |
+| 必填      | 否                                       |
+| 默认值    | `http://localhost:5173`                  |
+| 示例      | `https://console.example.com,https://admin.example.com` |
+
+逗号分隔的允许 CORS 来源列表。每个来源必须包含协议（`http://` 或 `https://`），且不能包含尾部斜杠。
+
+**安全说明：**
+- 在生产环境中，仅限制为托管控制台前端的域名。
+- 不要使用 `*`，这会完全禁用 CORS 保护。
+
+---
+
+### 可观测性
+
+#### `QUICKWIT_URL`
+
+| 属性      | 值                             |
+| --------- | ------------------------------ |
+| 必填      | 否                             |
+| 默认值    | —                              |
+| 示例      | `http://quickwit:7280`         |
+
+Quickwit 实例的基础 URL，用于审计日志索引和搜索。如果未设置，通过 API 的审计日志搜索将不可用（条目仍会记录到标准输出）。
+
+---
+
+#### `QUICKWIT_INDEX`
+
+| 属性      | 值                          |
+| --------- | --------------------------- |
+| 必填      | 否                          |
+| 默认值    | `agentbastion-audit`        |
+| 示例      | `agentbastion-audit-prod`   |
+
+存储审计日志条目的 Quickwit 索引名称。索引必须在 AgentBastion 启动前创建（索引 Schema 详见部署指南）。
+
+---
+
+#### `SYSLOG_ADDR`
+
+| 属性      | 值                           |
+| --------- | ---------------------------- |
+| 必填      | 否                           |
+| 默认值    | —                            |
+| 示例      | `siem.corp.internal:514`     |
+
+用于转发审计日志条目的 syslog 接收器 UDP 地址。格式：`host:port`。设置后，AgentBastion 会为每个审计事件发送 RFC 5424 结构化 syslog 消息，同时也会进行 Quickwit 索引。
+
+适用于 SIEM 集成（Splunk、Elastic SIEM、Microsoft Sentinel）。
+
+---
+
+#### `RUST_LOG`
+
+| 属性      | 值                                                       |
+| --------- | -------------------------------------------------------- |
+| 必填      | 否                                                       |
+| 默认值    | `info`                                                   |
+| 示例      | `agentbastion=debug,tower_http=debug,sqlx=warn`         |
+
+使用 [`tracing-subscriber` `EnvFilter` 语法](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) 控制日志详细程度。接受逗号分隔的 `target=level` 形式的指令。
+
+常用配置：
+
+| 用例                  | 值                                                 |
+| --------------------- | -------------------------------------------------- |
+| 生产环境              | `info` 或 `agentbastion=info,tower_http=warn`      |
+| 调试 HTTP             | `agentbastion=debug,tower_http=debug`              |
+| 调试 SQL              | `agentbastion=debug,sqlx=debug`                    |
+| 最少输出              | `warn`                                             |
+
+---
+
+### OIDC / SSO
+
+要启用 SSO，必须同时设置所有四个 OIDC 变量。如果缺少任何一个，OIDC 将被禁用，`GET /api/auth/sso/authorize` 将返回 500。
+
+#### `OIDC_ISSUER_URL`
+
+| 属性      | 值                                                               |
+| --------- | ---------------------------------------------------------------- |
+| 必填      | 否（如需 SSO 则必填）                                           |
+| 默认值    | —                                                                |
+| 示例      | `https://login.microsoftonline.com/tenant-id/v2.0`              |
+
+OIDC 发行者 URL。AgentBastion 在启动时从此 URL 获取 `.well-known/openid-configuration` 文档以发现端点。
+
+---
+
+#### `OIDC_CLIENT_ID`
+
+| 属性      | 值                           |
+| --------- | ---------------------------- |
+| 必填      | 否（如需 SSO 则必填）       |
+| 默认值    | —                            |
+| 示例      | `abcdef12-3456-7890-abcd-ef1234567890` |
+
+在 OIDC 身份提供商注册的客户端 ID。
+
+---
+
+#### `OIDC_CLIENT_SECRET`
+
+| 属性      | 值                                 |
+| --------- | ---------------------------------- |
+| 必填      | 否（如需 SSO 则必填）             |
+| 默认值    | —                                  |
+| 示例      | `your-client-secret-value`         |
+
+OIDC 应用的客户端密钥。
+
+**安全说明：**
+- 这是敏感凭证。请存储在密钥管理器中。
+- 根据身份提供商的建议定期轮换。
+
+---
+
+#### `OIDC_REDIRECT_URL`
+
+| 属性      | 值                                                             |
+| --------- | -------------------------------------------------------------- |
+| 必填      | 否（如需 SSO 则必填）                                         |
+| 默认值    | —                                                              |
+| 示例      | `https://console.example.com/api/auth/sso/callback`           |
+
+OIDC 提供商在认证后重定向到的完整 URL。此 URL 必须与在身份提供商配置中注册的重定向 URI 完全匹配，并且必须可被用户浏览器访问。
+
+---
+
+## 配置模式
+
+### 开发环境与生产环境对比
+
+| 设置              | 开发环境                                     | 生产环境                                    |
+| ----------------- | -------------------------------------------- | ------------------------------------------- |
+| `DATABASE_URL`    | 本地 PostgreSQL，不使用 SSL                  | 托管 PostgreSQL，使用 `sslmode=require`     |
+| `REDIS_URL`       | 本地 Redis，无认证                           | Redis，使用 `requirepass` 或托管 Redis      |
+| `JWT_SECRET`      | 任意稳定值，方便开发                         | 密码学随机 256 位密钥                       |
+| `ENCRYPTION_KEY`  | 任意稳定的 32 字节十六进制值，方便开发       | 密码学随机，存储在 HSM 中                   |
+| `CORS_ORIGINS`    | `http://localhost:5173`                      | `https://console.yourdomain.com`            |
+| `RUST_LOG`        | `agentbastion=debug,tower_http=debug`        | `info` 或 `agentbastion=info`               |
+| `SYSLOG_ADDR`     | _（未设置）_                                 | SIEM 接收器地址                             |
+| OIDC 变量         | _（除非测试 SSO 否则未设置）_                | 完整配置                                    |
+
+### 使用 .env 文件
+
+本地开发时，在项目根目录创建 `.env` 文件：
+
+```bash
+# .env (DO NOT commit this file)
+DATABASE_URL=postgres://agentbastion:devpass@localhost:5432/agentbastion
+REDIS_URL=redis://localhost:6379
+JWT_SECRET=dev-only-jwt-secret-do-not-use-in-production-000000
+ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+CORS_ORIGINS=http://localhost:5173
+RUST_LOG=agentbastion=debug,tower_http=debug
+```
+
+AgentBastion 通过 `dotenvy` crate 自动加载 `.env` 文件。`.env` 文件应列在 `.gitignore` 中。
+
+### Docker / Docker Compose
+
+通过 `docker-compose.yml` 传递环境变量：
+
+```yaml
+services:
+  agentbastion:
+    image: agentbastion:latest
+    environment:
+      DATABASE_URL: postgres://agentbastion:${DB_PASSWORD}@postgres:5432/agentbastion
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      CORS_ORIGINS: https://console.example.com
+      QUICKWIT_URL: http://quickwit:7280
+      RUST_LOG: info
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+```
+
+使用 `.env` 文件或 shell 导出来提供 `${DB_PASSWORD}`、`${JWT_SECRET}` 和 `${ENCRYPTION_KEY}`，避免在 compose 文件中硬编码。
+
+### Kubernetes Secrets
+
+为敏感值创建 Kubernetes Secret：
+
+```bash
+kubectl create secret generic agentbastion-secrets \
+  --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
+  --from-literal=ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+  --from-literal=DATABASE_URL="postgres://user:pass@pg-host:5432/agentbastion?sslmode=require" \
+  --from-literal=REDIS_URL="rediss://:password@redis-host:6380" \
+  --from-literal=OIDC_CLIENT_SECRET="your-oidc-secret"
+```
+
+在 Deployment 中引用该 Secret：
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentbastion
+spec:
+  template:
+    spec:
+      containers:
+        - name: agentbastion
+          image: agentbastion:latest
+          envFrom:
+            - secretRef:
+                name: agentbastion-secrets
+          env:
+            - name: CORS_ORIGINS
+              value: "https://console.example.com"
+            - name: GATEWAY_PORT
+              value: "3000"
+            - name: CONSOLE_PORT
+              value: "3001"
+            - name: QUICKWIT_URL
+              value: "http://quickwit:7280"
+            - name: RUST_LOG
+              value: "info"
+```
+
+### 生成安全随机密钥
+
+使用 `openssl` 生成密码学安全的随机值：
+
+```bash
+# Generate a 256-bit key (for JWT_SECRET or ENCRYPTION_KEY)
+openssl rand -hex 32
+
+# Generate a 128-bit key (for less critical uses)
+openssl rand -hex 16
+
+# Generate a base64-encoded key (alternative format)
+openssl rand -base64 32
+```
+
+`JWT_SECRET` 和 `ENCRYPTION_KEY` 都期望 64 字符的十六进制字符串（代表 32 字节 / 256 位）。
+
+---
+
+## 启动验证
+
+AgentBastion 在启动时验证配置，如果出现以下情况将拒绝启动：
+
+- `DATABASE_URL` 缺失或数据库不可达
+- `REDIS_URL` 缺失或 Redis 不可达
+- `JWT_SECRET` 缺失
+- `ENCRYPTION_KEY` 缺失或不是有效的 64 字符十六进制字符串
+- `OIDC_*` 变量部分配置（必须全部设置或全部不设置）
+
+如果服务器启动失败，请检查应用日志。缺失或无效的配置将以清晰的错误消息报告。

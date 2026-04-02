@@ -1,0 +1,24 @@
+[package]
+name = "agent-bastion-common"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+axum = { workspace = true }
+sqlx = { workspace = true }
+fred = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+rust_decimal = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+dotenvy = { workspace = true }
+tokio = { workspace = true }
+utoipa = { workspace = true }
+reqwest = { workspace = true }
+aes-gcm = { workspace = true }
+rand = { workspace = true }
+hex = { workspace = true }

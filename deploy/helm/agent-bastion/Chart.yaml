@@ -1,0 +1,11 @@
+apiVersion: v2
+name: agent-bastion
+description: Enterprise AI API Gateway & MCP Management Platform
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - ai
+  - gateway
+  - mcp
+  - bastion

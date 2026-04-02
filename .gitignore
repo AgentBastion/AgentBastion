@@ -1,0 +1,24 @@
+# Rust
+/target
+**/*.rs.bk
+
+# Environment
+.env
+!.env.example
+
+# Node
+web/node_modules
+web/dist
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AI
+/.claude

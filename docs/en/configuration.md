@@ -1,0 +1,380 @@
+**[English](../en/configuration.md) | [中文](../zh-CN/configuration.md)**
+
+# AgentBastion Configuration Reference
+
+This document provides a complete reference for all configuration options in AgentBastion. Configuration is managed exclusively through environment variables.
+
+---
+
+## Environment Variables
+
+### Database
+
+#### `DATABASE_URL`
+
+| Property  | Value                                                      |
+| --------- | ---------------------------------------------------------- |
+| Required  | Yes                                                        |
+| Default   | —                                                          |
+| Example   | `postgres://agentbastion:password@localhost:5432/agentbastion` |
+
+PostgreSQL connection string. AgentBastion requires PostgreSQL 15 or later.
+
+**Security notes:**
+- In production, use `sslmode=require` to enforce encrypted connections: `postgres://user:pass@host:5432/db?sslmode=require`
+- Avoid embedding passwords in URLs checked into version control. Use a secrets manager.
+- The database user needs permissions to create tables (for migrations) or should have migrations applied separately.
+
+---
+
+#### `REDIS_URL`
+
+| Property  | Value                                    |
+| --------- | ---------------------------------------- |
+| Required  | Yes                                      |
+| Default   | —                                        |
+| Example   | `redis://localhost:6379`                 |
+
+Redis connection string. Used for rate limiting, OIDC state/nonce storage, and session management.
+
+**Security notes:**
+- In production, enable Redis authentication: `redis://:yourpassword@host:6379`
+- For TLS-enabled Redis, use the `rediss://` scheme: `rediss://:password@host:6380`
+
+---
+
+### Cryptography
+
+#### `JWT_SECRET`
+
+| Property  | Value                                              |
+| --------- | -------------------------------------------------- |
+| Required  | Yes                                                |
+| Default   | —                                                  |
+| Example   | `a3f8c1e0b9d74...` (64-character hex string)       |
+
+Shared secret used for HS256 JWT signing and verification. Must be at least 256 bits (32 bytes / 64 hex characters) for adequate security.
+
+**Security notes:**
+- Generate with: `openssl rand -hex 32`
+- Changing this value invalidates all active access and refresh tokens, forcing all users to re-authenticate.
+- Never reuse this value across environments (dev/staging/prod).
+- Store in a secrets manager, not in plaintext files.
+
+---
+
+#### `ENCRYPTION_KEY`
+
+| Property  | Value                                              |
+| --------- | -------------------------------------------------- |
+| Required  | Yes                                                |
+| Default   | —                                                  |
+| Example   | `b7e4d219f0c83...` (64-character hex string)       |
+
+256-bit key (32 bytes, encoded as 64 hex characters) used for AES-256-GCM encryption of sensitive data at rest (provider API keys, MCP server auth secrets).
+
+**Security notes:**
+- Generate with: `openssl rand -hex 32`
+- Changing this value renders all previously encrypted data (provider API keys, MCP auth secrets) unreadable. You must re-enter those values after rotation.
+- This is the most critical secret in the system. Compromise of this key exposes all stored provider credentials.
+- Store in a hardware security module (HSM) or secrets manager in production.
+
+---
+
+### Server
+
+#### `SERVER_HOST`
+
+| Property  | Value           |
+| --------- | --------------- |
+| Required  | No              |
+| Default   | `0.0.0.0`      |
+| Example   | `127.0.0.1`    |
+
+IP address the servers bind to. Use `0.0.0.0` to listen on all interfaces, or `127.0.0.1` to restrict to localhost only.
+
+---
+
+#### `GATEWAY_PORT`
+
+| Property  | Value  |
+| --------- | ------ |
+| Required  | No     |
+| Default   | `3000` |
+| Example   | `8080` |
+
+TCP port for the gateway server (OpenAI-compatible API and MCP transport).
+
+---
+
+#### `CONSOLE_PORT`
+
+| Property  | Value  |
+| --------- | ------ |
+| Required  | No     |
+| Default   | `3001` |
+| Example   | `8081` |
+
+TCP port for the console server (management API and admin endpoints).
+
+---
+
+#### `CORS_ORIGINS`
+
+| Property  | Value                                    |
+| --------- | ---------------------------------------- |
+| Required  | No                                       |
+| Default   | `http://localhost:5173`                  |
+| Example   | `https://console.example.com,https://admin.example.com` |
+
+Comma-separated list of allowed CORS origins. Each origin must include the scheme (`http://` or `https://`) and must not include a trailing slash.
+
+**Security notes:**
+- In production, restrict to only the domain(s) that host your console frontend.
+- Do not use `*` as this disables CORS protection entirely.
+
+---
+
+### Observability
+
+#### `QUICKWIT_URL`
+
+| Property  | Value                          |
+| --------- | ------------------------------ |
+| Required  | No                             |
+| Default   | —                              |
+| Example   | `http://quickwit:7280`         |
+
+Base URL of the Quickwit instance for audit log indexing and search. If not set, audit log search via the API will be unavailable (entries are still logged to stdout).
+
+---
+
+#### `QUICKWIT_INDEX`
+
+| Property  | Value                       |
+| --------- | --------------------------- |
+| Required  | No                          |
+| Default   | `agentbastion-audit`        |
+| Example   | `agentbastion-audit-prod`   |
+
+Name of the Quickwit index where audit log entries are stored. The index must be created before AgentBastion starts (see the deployment guide for index schema).
+
+---
+
+#### `SYSLOG_ADDR`
+
+| Property  | Value                        |
+| --------- | ---------------------------- |
+| Required  | No                           |
+| Default   | —                            |
+| Example   | `siem.corp.internal:514`     |
+
+UDP address of a syslog receiver for forwarding audit log entries. Format: `host:port`. When set, AgentBastion sends RFC 5424 structured syslog messages for every audit event in addition to Quickwit indexing.
+
+Useful for SIEM integration (Splunk, Elastic SIEM, Microsoft Sentinel).
+
+---
+
+#### `RUST_LOG`
+
+| Property  | Value                                                    |
+| --------- | -------------------------------------------------------- |
+| Required  | No                                                       |
+| Default   | `info`                                                   |
+| Example   | `agentbastion=debug,tower_http=debug,sqlx=warn`         |
+
+Controls log verbosity using the [`tracing-subscriber` `EnvFilter` syntax](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html). Accepts comma-separated directives of the form `target=level`.
+
+Common configurations:
+
+| Use Case              | Value                                              |
+| --------------------- | -------------------------------------------------- |
+| Production            | `info` or `agentbastion=info,tower_http=warn`      |
+| Debugging HTTP        | `agentbastion=debug,tower_http=debug`              |
+| Debugging SQL         | `agentbastion=debug,sqlx=debug`                    |
+| Minimal output        | `warn`                                             |
+
+---
+
+### OIDC / SSO
+
+All four OIDC variables must be set together to enable SSO. If any are missing, OIDC is disabled and `GET /api/auth/sso/authorize` returns 500.
+
+#### `OIDC_ISSUER_URL`
+
+| Property  | Value                                                            |
+| --------- | ---------------------------------------------------------------- |
+| Required  | No (required if SSO is desired)                                  |
+| Default   | —                                                                |
+| Example   | `https://login.microsoftonline.com/tenant-id/v2.0`              |
+
+The OIDC issuer URL. AgentBastion fetches the `.well-known/openid-configuration` document from this URL at startup to discover endpoints.
+
+---
+
+#### `OIDC_CLIENT_ID`
+
+| Property  | Value                        |
+| --------- | ---------------------------- |
+| Required  | No (required if SSO)         |
+| Default   | —                            |
+| Example   | `abcdef12-3456-7890-abcd-ef1234567890` |
+
+The client ID registered with your OIDC identity provider.
+
+---
+
+#### `OIDC_CLIENT_SECRET`
+
+| Property  | Value                              |
+| --------- | ---------------------------------- |
+| Required  | No (required if SSO)               |
+| Default   | —                                  |
+| Example   | `your-client-secret-value`         |
+
+The client secret for the OIDC application.
+
+**Security notes:**
+- This is a sensitive credential. Store it in a secrets manager.
+- Rotate periodically according to your IdP's recommendations.
+
+---
+
+#### `OIDC_REDIRECT_URL`
+
+| Property  | Value                                                          |
+| --------- | -------------------------------------------------------------- |
+| Required  | No (required if SSO)                                           |
+| Default   | —                                                              |
+| Example   | `https://console.example.com/api/auth/sso/callback`           |
+
+The full URL that the OIDC provider redirects to after authentication. This must exactly match the redirect URI registered in your IdP configuration and must be reachable by the user's browser.
+
+---
+
+## Configuration Patterns
+
+### Development vs Production
+
+| Setting           | Development                                  | Production                                  |
+| ----------------- | -------------------------------------------- | ------------------------------------------- |
+| `DATABASE_URL`    | Local PostgreSQL without SSL                 | Managed PostgreSQL with `sslmode=require`   |
+| `REDIS_URL`       | Local Redis without auth                     | Redis with `requirepass` or managed Redis   |
+| `JWT_SECRET`      | Any stable value for dev convenience         | Cryptographically random 256-bit key        |
+| `ENCRYPTION_KEY`  | Any stable 32-byte hex for dev convenience   | Cryptographically random, stored in HSM     |
+| `CORS_ORIGINS`    | `http://localhost:5173`                      | `https://console.yourdomain.com`            |
+| `RUST_LOG`        | `agentbastion=debug,tower_http=debug`        | `info` or `agentbastion=info`               |
+| `SYSLOG_ADDR`     | _(unset)_                                    | SIEM receiver address                       |
+| OIDC variables    | _(unset unless testing SSO)_                 | Fully configured                            |
+
+### Using .env Files
+
+For local development, create a `.env` file in the project root:
+
+```bash
+# .env (DO NOT commit this file)
+DATABASE_URL=postgres://agentbastion:devpass@localhost:5432/agentbastion
+REDIS_URL=redis://localhost:6379
+JWT_SECRET=dev-only-jwt-secret-do-not-use-in-production-000000
+ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+CORS_ORIGINS=http://localhost:5173
+RUST_LOG=agentbastion=debug,tower_http=debug
+```
+
+AgentBastion loads `.env` automatically via the `dotenvy` crate. The `.env` file should be listed in `.gitignore`.
+
+### Docker / Docker Compose
+
+Pass environment variables through `docker-compose.yml`:
+
+```yaml
+services:
+  agentbastion:
+    image: agentbastion:latest
+    environment:
+      DATABASE_URL: postgres://agentbastion:${DB_PASSWORD}@postgres:5432/agentbastion
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      CORS_ORIGINS: https://console.example.com
+      QUICKWIT_URL: http://quickwit:7280
+      RUST_LOG: info
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+```
+
+Use a `.env` file or shell exports to provide `${DB_PASSWORD}`, `${JWT_SECRET}`, and `${ENCRYPTION_KEY}` without hardcoding them in the compose file.
+
+### Kubernetes Secrets
+
+Create a Kubernetes Secret for sensitive values:
+
+```bash
+kubectl create secret generic agentbastion-secrets \
+  --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
+  --from-literal=ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+  --from-literal=DATABASE_URL="postgres://user:pass@pg-host:5432/agentbastion?sslmode=require" \
+  --from-literal=REDIS_URL="rediss://:password@redis-host:6380" \
+  --from-literal=OIDC_CLIENT_SECRET="your-oidc-secret"
+```
+
+Reference the secret in your Deployment:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentbastion
+spec:
+  template:
+    spec:
+      containers:
+        - name: agentbastion
+          image: agentbastion:latest
+          envFrom:
+            - secretRef:
+                name: agentbastion-secrets
+          env:
+            - name: CORS_ORIGINS
+              value: "https://console.example.com"
+            - name: GATEWAY_PORT
+              value: "3000"
+            - name: CONSOLE_PORT
+              value: "3001"
+            - name: QUICKWIT_URL
+              value: "http://quickwit:7280"
+            - name: RUST_LOG
+              value: "info"
+```
+
+### Generating Secure Random Keys
+
+Use `openssl` to generate cryptographically secure random values:
+
+```bash
+# Generate a 256-bit key (for JWT_SECRET or ENCRYPTION_KEY)
+openssl rand -hex 32
+
+# Generate a 128-bit key (for less critical uses)
+openssl rand -hex 16
+
+# Generate a base64-encoded key (alternative format)
+openssl rand -base64 32
+```
+
+Both `JWT_SECRET` and `ENCRYPTION_KEY` expect a 64-character hex string (representing 32 bytes / 256 bits).
+
+---
+
+## Startup Validation
+
+AgentBastion validates its configuration at startup and will refuse to start if:
+
+- `DATABASE_URL` is missing or the database is unreachable
+- `REDIS_URL` is missing or Redis is unreachable
+- `JWT_SECRET` is missing
+- `ENCRYPTION_KEY` is missing or not a valid 64-character hex string
+- `OIDC_*` variables are partially configured (all four must be set, or none)
+
+Check the application logs if the server fails to start. Missing or invalid configuration will be reported with clear error messages.

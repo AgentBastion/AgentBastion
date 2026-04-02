@@ -1,0 +1,89 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/server",
+    "crates/gateway",
+    "crates/mcp-gateway",
+    "crates/auth",
+    "crates/common",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+# Web framework
+axum = { version = "0.8", features = ["macros"] }
+axum-extra = { version = "0.12", features = ["typed-header"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = [
+    "cors", "trace", "compression-gzip", "request-id",
+    "limit", "timeout", "catch-panic", "sensitive-headers", "set-header",
+] }
+tokio = { version = "1", features = ["full"] }
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "uuid", "chrono", "json", "migrate", "rust_decimal"] }
+rust_decimal = { version = "1", features = ["serde"] }
+
+# Redis
+fred = { version = "10", features = ["subscriber-client", "i-scripts"] }
+
+# Auth
+jsonwebtoken = { version = "10", features = ["rust_crypto"] }
+argon2 = "0.5"
+openidconnect = { version = "4", features = ["reqwest"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# HTTP client (upstream proxy)
+reqwest = { version = "0.13", features = ["stream", "json", "rustls"] }
+hyper = { version = "1", features = ["full"] }
+hyper-util = "0.1"
+http-body-util = "0.1"
+eventsource-stream = "0.2"
+
+# Async
+futures = "0.3"
+tokio-stream = "0.1"
+async-stream = "0.3"
+
+# Token counting
+tiktoken-rs = "0.9"
+
+# Crypto
+aes-gcm = "0.10"
+sha2 = "0.11"
+rand = "0.10"
+hex = "0.4"
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-opentelemetry = "0.32"
+opentelemetry = "0.31"
+opentelemetry-otlp = "0.31"
+
+# Config
+dotenvy = "0.15"
+
+# API documentation
+utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-axum = "0.2"
+utoipa-swagger-ui = { version = "9", features = ["axum"] }
+
+# Utils
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+anyhow = "1"
+
+# Workspace crates
+agent-bastion-common = { path = "crates/common" }
+agent-bastion-auth = { path = "crates/auth" }
+agent-bastion-gateway = { path = "crates/gateway" }
+agent-bastion-mcp-gateway = { path = "crates/mcp-gateway" }

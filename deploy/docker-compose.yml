@@ -1,0 +1,118 @@
+## Production Docker Compose
+## Usage: docker compose -f deploy/docker-compose.yml up -d
+##
+## Required: create .env.production with real secrets before deploying.
+
+services:
+  server:
+    build:
+      context: ../
+      dockerfile: deploy/docker/Dockerfile.server
+    ports:
+      - "${GATEWAY_PORT:-3000}:3000"   # Gateway — expose to clients
+      # Console port NOT exposed externally by default
+    expose:
+      - "3001"   # Console — only accessible within docker network
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-bastion}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-agent_bastion}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      GATEWAY_PORT: "3000"
+      CONSOLE_PORT: "3001"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      QUICKWIT_URL: http://quickwit:7280
+      QUICKWIT_INDEX: audit_logs
+      SYSLOG_ADDR: ${SYSLOG_ADDR:-}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:-}
+      RUST_LOG: ${RUST_LOG:-info,agent_bastion=info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../
+      dockerfile: deploy/docker/Dockerfile.web
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-bastion}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-agent_bastion}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-bastion}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD:-}
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  rustfs:
+    image: ghcr.io/rustfs/rustfs:1.0.0-alpha.90
+    command: server /data --console-address ":9001"
+    environment:
+      RUSTFS_ROOT_USER: ${RUSTFS_USER:-rustfs}
+      RUSTFS_ROOT_PASSWORD: ${RUSTFS_PASSWORD}
+    volumes:
+      - rustfs_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  quickwit:
+    image: quickwit/quickwit:0.8.1
+    command: run
+    environment:
+      QW_DEFAULT_INDEX_ROOT_URI: s3://quickwit
+      QW_LISTEN_ADDRESS: 0.0.0.0
+      AWS_ACCESS_KEY_ID: ${RUSTFS_USER:-rustfs}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_PASSWORD}
+      AWS_ENDPOINT_URL: http://rustfs:9000
+      AWS_REGION: us-east-1
+      AWS_FORCE_PATH_STYLE: "true"
+    volumes:
+      - quickwit_data:/quickwit/qwdata
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7280/health/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  rustfs_data:
+  quickwit_data:

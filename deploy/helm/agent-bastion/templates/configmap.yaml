@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  SERVER_HOST: "0.0.0.0"
+  GATEWAY_PORT: "3000"
+  CONSOLE_PORT: "3001"
+  CORS_ORIGINS: {{ .Values.config.corsOrigins | quote }}
+  RUST_LOG: {{ .Values.config.rustLog | quote }}
+  {{- if .Values.quickwit.enabled }}
+  QUICKWIT_URL: {{ .Values.quickwit.url | quote }}
+  QUICKWIT_INDEX: {{ .Values.quickwit.index | quote }}
+  {{- end }}
+  {{- if .Values.syslog.enabled }}
+  SYSLOG_ADDR: {{ .Values.syslog.addr | quote }}
+  {{- end }}
+  {{- if .Values.secrets.oidcIssuerUrl }}
+  OIDC_ISSUER_URL: {{ .Values.secrets.oidcIssuerUrl | quote }}
+  {{- end }}
+  {{- if .Values.secrets.oidcRedirectUrl }}
+  OIDC_REDIRECT_URL: {{ .Values.secrets.oidcRedirectUrl | quote }}
+  {{- end }}

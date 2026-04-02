@@ -1,0 +1,75 @@
+use sha2::{Digest, Sha256};
+
+const KEY_PREFIX: &str = "ab-";
+const KEY_LENGTH: usize = 48;
+
+pub struct GeneratedApiKey {
+    pub plaintext: String,
+    pub prefix: String,
+    pub hash: String,
+}
+
+pub fn generate_api_key() -> GeneratedApiKey {
+    let mut random_bytes = vec![0u8; KEY_LENGTH];
+    rand::fill(&mut random_bytes[..]);
+    let encoded = hex::encode(&random_bytes);
+
+    let plaintext = format!("{KEY_PREFIX}{encoded}");
+    let prefix = plaintext[..11].to_string(); // "ab-" + 8 chars
+    let hash = hash_api_key(&plaintext);
+
+    GeneratedApiKey {
+        plaintext,
+        prefix,
+        hash,
+    }
+}
+
+pub fn hash_api_key(key: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(key.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+pub fn verify_api_key(plaintext: &str, stored_hash: &str) -> bool {
+    hash_api_key(plaintext) == stored_hash
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_api_key_has_correct_prefix() {
+        let key = generate_api_key();
+        assert!(key.plaintext.starts_with("ab-"), "key should start with ab- prefix");
+        assert!(key.prefix.starts_with("ab-"), "prefix should start with ab-");
+        assert_eq!(key.prefix.len(), 11, "prefix should be 11 chars (ab- + 8)");
+    }
+
+    #[test]
+    fn hash_api_key_is_deterministic() {
+        let input = "ab-deadbeef12345678";
+        let h1 = hash_api_key(input);
+        let h2 = hash_api_key(input);
+        assert_eq!(h1, h2, "same input must produce same hash");
+    }
+
+    #[test]
+    fn verify_api_key_roundtrip() {
+        let key = generate_api_key();
+        assert!(
+            verify_api_key(&key.plaintext, &key.hash),
+            "generated key should verify against its own hash"
+        );
+    }
+
+    #[test]
+    fn verify_api_key_rejects_wrong_key() {
+        let key = generate_api_key();
+        assert!(
+            !verify_api_key("ab-wrong_key", &key.hash),
+            "wrong plaintext should not verify"
+        );
+    }
+}

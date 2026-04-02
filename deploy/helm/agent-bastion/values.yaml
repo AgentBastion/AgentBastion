@@ -1,0 +1,81 @@
+replicaCount: 1
+
+image:
+  server:
+    repository: agent-bastion-server
+    tag: latest
+    pullPolicy: IfNotPresent
+  web:
+    repository: agent-bastion-web
+    tag: latest
+    pullPolicy: IfNotPresent
+
+service:
+  gateway:
+    type: ClusterIP
+    port: 3000
+  console:
+    type: ClusterIP
+    port: 3001
+  web:
+    type: ClusterIP
+    port: 80
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  # Gateway ingress — public
+  gateway:
+    host: gateway.example.com
+    tls: []
+  # Console ingress — internal
+  console:
+    host: console.internal.example.com
+    tls: []
+
+config:
+  corsOrigins: "https://console.internal.example.com"
+  rustLog: "info,agent_bastion=info"
+
+# External secrets — provide via --set or external secrets operator
+secrets:
+  jwtSecret: ""
+  encryptionKey: ""
+  databaseUrl: ""
+  redisUrl: ""
+  oidcClientId: ""
+  oidcClientSecret: ""
+  oidcIssuerUrl: ""
+  oidcRedirectUrl: ""
+
+quickwit:
+  enabled: true
+  url: "http://quickwit:7280"
+  index: "audit_logs"
+
+syslog:
+  enabled: false
+  addr: ""
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+resources:
+  server:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  web:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
