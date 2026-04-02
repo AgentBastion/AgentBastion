@@ -35,14 +35,14 @@ impl RequestMetadata {
         let mut tags = HashMap::new();
 
         // Extract from request body `extra` field — look for a "metadata" object
-        if let Some(metadata_obj) = body.extra.get("metadata") {
-            if let Some(map) = metadata_obj.as_object() {
-                for (k, v) in map {
-                    if let Some(v_str) = v.as_str() {
-                        let key = k.to_lowercase();
-                        if key.len() <= MAX_KEY_LEN && v_str.len() <= MAX_VALUE_LEN {
-                            tags.insert(key, v_str.to_string());
-                        }
+        if let Some(metadata_obj) = body.extra.get("metadata")
+            && let Some(map) = metadata_obj.as_object()
+        {
+            for (k, v) in map {
+                if let Some(v_str) = v.as_str() {
+                    let key = k.to_lowercase();
+                    if key.len() <= MAX_KEY_LEN && v_str.len() <= MAX_VALUE_LEN {
+                        tags.insert(key, v_str.to_string());
                     }
                 }
             }
@@ -56,10 +56,11 @@ impl RequestMetadata {
                 if tag_key.is_empty() {
                     continue;
                 }
-                if let Ok(value_str) = value.to_str() {
-                    if tag_key.len() <= MAX_KEY_LEN && value_str.len() <= MAX_VALUE_LEN {
-                        tags.insert(tag_key.to_string(), value_str.to_string());
-                    }
+                if let Ok(value_str) = value.to_str()
+                    && tag_key.len() <= MAX_KEY_LEN
+                    && value_str.len() <= MAX_VALUE_LEN
+                {
+                    tags.insert(tag_key.to_string(), value_str.to_string());
                 }
             }
         }
@@ -127,7 +128,10 @@ mod tests {
     #[test]
     fn extract_from_headers() {
         let mut headers = HeaderMap::new();
-        headers.insert("X-Metadata-Department", HeaderValue::from_static("engineering"));
+        headers.insert(
+            "X-Metadata-Department",
+            HeaderValue::from_static("engineering"),
+        );
         headers.insert("X-Metadata-Project", HeaderValue::from_static("chatbot-v2"));
 
         let req = make_request("gpt-4o");
@@ -157,10 +161,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("X-Metadata-Team", HeaderValue::from_static("infra"));
 
-        let req = make_request_with_metadata(
-            "gpt-4o",
-            serde_json::json!({"team": "platform"}),
-        );
+        let req = make_request_with_metadata("gpt-4o", serde_json::json!({"team": "platform"}));
         let meta = RequestMetadata::extract(&headers, &req);
 
         assert_eq!(meta.tags.get("team").unwrap(), "infra");
@@ -187,10 +188,7 @@ mod tests {
     #[test]
     fn to_json_includes_all_fields() {
         let headers = HeaderMap::new();
-        let req = make_request_with_metadata(
-            "gpt-4o",
-            serde_json::json!({"dept": "eng"}),
-        );
+        let req = make_request_with_metadata("gpt-4o", serde_json::json!({"dept": "eng"}));
         let meta = RequestMetadata::extract(&headers, &req);
         let json = meta.to_json();
 

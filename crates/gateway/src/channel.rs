@@ -126,10 +126,7 @@ impl ChannelScheduler {
     ///
     /// If the selected channel from the highest priority group fails, try
     /// the next channel in the same group, then fall through to lower priority groups.
-    pub async fn select_with_fallback(
-        &self,
-        model: &str,
-    ) -> Vec<Arc<dyn DynAiProvider>> {
+    pub async fn select_with_fallback(&self, model: &str) -> Vec<Arc<dyn DynAiProvider>> {
         let channels = self.channels.read().await;
 
         let mut candidates: Vec<&Channel> = channels

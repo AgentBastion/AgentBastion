@@ -20,7 +20,7 @@ impl SystemRole {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "super_admin" => Some(SystemRole::SuperAdmin),
             "admin" => Some(SystemRole::Admin),
@@ -114,7 +114,7 @@ mod tests {
         ];
         for role in &roles {
             let s = role.as_str();
-            let parsed = SystemRole::from_str(s);
+            let parsed = SystemRole::parse(s);
             assert_eq!(parsed.as_ref(), Some(role), "roundtrip failed for {s}");
         }
     }

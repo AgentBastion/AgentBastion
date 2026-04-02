@@ -1,5 +1,5 @@
-use axum::extract::State;
 use axum::Json;
+use axum::extract::State;
 use serde::{Deserialize, Serialize};
 
 use agent_bastion_auth::password;
@@ -49,7 +49,9 @@ pub async fn create_user(
 ) -> Result<Json<UserResponse>, AppError> {
     // Input validation
     if req.password.len() < 8 {
-        return Err(AppError::BadRequest("Password must be at least 8 characters".into()));
+        return Err(AppError::BadRequest(
+            "Password must be at least 8 characters".into(),
+        ));
     }
     if !req.email.contains('@') || !req.email.contains('.') {
         return Err(AppError::BadRequest("Invalid email format".into()));
@@ -59,13 +61,16 @@ pub async fn create_user(
     let role_name = req.role.as_deref().unwrap_or("developer");
     let allowed_roles = ["developer", "viewer", "team_manager"];
     if !allowed_roles.contains(&role_name) {
-        return Err(AppError::BadRequest("Cannot assign admin or super_admin role via API".into()));
+        return Err(AppError::BadRequest(
+            "Cannot assign admin or super_admin role via API".into(),
+        ));
     }
 
-    let exists = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)")
-        .bind(&req.email)
-        .fetch_one(&state.db)
-        .await?;
+    let exists =
+        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)")
+            .bind(&req.email)
+            .fetch_one(&state.db)
+            .await?;
 
     if exists {
         return Err(AppError::Conflict("Email already registered".into()));
@@ -108,20 +113,20 @@ pub async fn force_logout_user(
     axum::extract::Path(user_id): axum::extract::Path<uuid::Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     // Delete signing key
-    let _: () = fred::interfaces::KeysInterface::del(
-        &state.redis,
-        &format!("signing_key:{user_id}"),
-    )
-    .await
-    .unwrap_or(());
+    let _: () =
+        fred::interfaces::KeysInterface::del(&state.redis, &format!("signing_key:{user_id}"))
+            .await
+            .unwrap_or(());
 
     state.audit.log(
         agent_bastion_common::audit::AuditEntry::new("admin.force_logout")
             .user_id(_auth_user.claims.sub)
-            .resource(&format!("user:{user_id}")),
+            .resource(format!("user:{user_id}")),
     );
 
-    Ok(Json(serde_json::json!({"status": "user_logged_out", "user_id": user_id})))
+    Ok(Json(
+        serde_json::json!({"status": "user_logged_out", "user_id": user_id}),
+    ))
 }
 
 // --- System settings ---

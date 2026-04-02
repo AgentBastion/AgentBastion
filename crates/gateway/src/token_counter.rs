@@ -18,8 +18,8 @@ pub fn estimate_tokens(text: &str) -> u32 {
         }
     }
 
-    let latin_tokens = (latin_chars + 3) / 4; // ceil division
-    let cjk_tokens = (cjk_chars + 1) / 2; // ceil division
+    let latin_tokens = latin_chars.div_ceil(4);
+    let cjk_tokens = cjk_chars.div_ceil(2);
 
     latin_tokens + cjk_tokens
 }

@@ -1,10 +1,8 @@
 use axum::extract::{Query, State};
 use axum::response::Redirect;
-use axum::Json;
 use serde::Deserialize;
 
 use agent_bastion_common::audit::AuditEntry;
-use agent_bastion_common::dto::LoginResponse;
 use agent_bastion_common::errors::AppError;
 use agent_bastion_common::models::User;
 
@@ -12,9 +10,10 @@ use crate::app::AppState;
 
 /// GET /api/auth/sso/authorize — redirect to OIDC provider.
 pub async fn sso_authorize(State(state): State<AppState>) -> Result<Redirect, AppError> {
-    let oidc = state.oidc.as_ref().ok_or(AppError::BadRequest(
-        "SSO is not configured".into(),
-    ))?;
+    let oidc = state
+        .oidc
+        .as_ref()
+        .ok_or(AppError::BadRequest("SSO is not configured".into()))?;
 
     let (auth_url, csrf_token, nonce) = oidc.authorize_url();
 
@@ -49,20 +48,18 @@ pub async fn sso_callback(
     State(state): State<AppState>,
     Query(params): Query<SsoCallbackParams>,
 ) -> Result<Redirect, AppError> {
-    let oidc = state.oidc.as_ref().ok_or(AppError::BadRequest(
-        "SSO is not configured".into(),
-    ))?;
+    let oidc = state
+        .oidc
+        .as_ref()
+        .ok_or(AppError::BadRequest("SSO is not configured".into()))?;
 
     // Retrieve nonce from Redis
     let redis_key = format!("oidc:state:{}", params.state);
-    let stored: Option<String> =
-        fred::interfaces::KeysInterface::get(&state.redis, &redis_key)
-            .await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("Redis error: {e}")))?;
+    let stored: Option<String> = fred::interfaces::KeysInterface::get(&state.redis, &redis_key)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("Redis error: {e}")))?;
 
-    let stored = stored.ok_or(AppError::BadRequest(
-        "Invalid or expired SSO state".into(),
-    ))?;
+    let stored = stored.ok_or(AppError::BadRequest("Invalid or expired SSO state".into()))?;
 
     // Delete the state from Redis (one-time use)
     let _: () = fred::interfaces::KeysInterface::del(&state.redis, &redis_key)
@@ -94,14 +91,8 @@ pub async fn sso_callback(
     let user = match user {
         Some(u) => u,
         None => {
-            let email = user_info
-                .email
-                .as_deref()
-                .unwrap_or(&user_info.subject);
-            let display_name = user_info
-                .name
-                .as_deref()
-                .unwrap_or(email);
+            let email = user_info.email.as_deref().unwrap_or(&user_info.subject);
+            let display_name = user_info.name.as_deref().unwrap_or(email);
 
             // Create new SSO user (no password)
             let u = sqlx::query_as::<_, User>(
@@ -159,7 +150,10 @@ pub async fn sso_callback(
     );
 
     // Redirect to frontend with tokens in URL fragment (never sent to server in subsequent requests)
-    let frontend_url = state.config.cors_origins.first()
+    let frontend_url = state
+        .config
+        .cors_origins
+        .first()
         .map(|s| s.as_str())
         .unwrap_or("http://localhost:5173");
 

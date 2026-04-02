@@ -31,16 +31,16 @@ impl AppConfig {
         dotenvy::dotenv().ok();
 
         Ok(Self {
-            database_url: std::env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/agent_bastion".into()),
+            database_url: std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+                "postgres://postgres:postgres@localhost:5432/agent_bastion".into()
+            }),
             redis_url: std::env::var("REDIS_URL")
                 .unwrap_or_else(|_| "redis://localhost:6379".into()),
             jwt_secret: std::env::var("JWT_SECRET")
                 .expect("JWT_SECRET environment variable is required"),
             encryption_key: std::env::var("ENCRYPTION_KEY")
                 .expect("ENCRYPTION_KEY environment variable is required"),
-            server_host: std::env::var("SERVER_HOST")
-                .unwrap_or_else(|_| "0.0.0.0".into()),
+            server_host: std::env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".into()),
             gateway_port: std::env::var("GATEWAY_PORT")
                 .unwrap_or_else(|_| "3000".into())
                 .parse()?,
@@ -55,8 +55,7 @@ impl AppConfig {
 
             // Quickwit
             quickwit_url: std::env::var("QUICKWIT_URL").ok(),
-            quickwit_index: std::env::var("QUICKWIT_INDEX")
-                .unwrap_or_else(|_| "audit_logs".into()),
+            quickwit_index: std::env::var("QUICKWIT_INDEX").unwrap_or_else(|_| "audit_logs".into()),
 
             // OIDC
             oidc_issuer_url: std::env::var("OIDC_ISSUER_URL").ok(),

@@ -1,7 +1,7 @@
 use axum::{
-    http::{header, HeaderValue, Method},
-    routing::{delete, get, patch, post},
     Router,
+    http::{HeaderValue, Method, header},
+    routing::{delete, get, patch, post},
 };
 use fred::clients::Client;
 use sqlx::PgPool;
@@ -17,10 +17,10 @@ use agent_bastion_auth::jwt::JwtManager;
 use agent_bastion_auth::oidc::OidcManager;
 use agent_bastion_common::audit::AuditLogger;
 use agent_bastion_common::config::AppConfig;
+use agent_bastion_gateway::budget_alert::{BudgetAlertConfig, BudgetAlertManager};
 use agent_bastion_gateway::cache::ResponseCache;
 use agent_bastion_gateway::content_filter::ContentFilter;
 use agent_bastion_gateway::model_mapping::ModelMapper;
-use agent_bastion_gateway::budget_alert::{BudgetAlertConfig, BudgetAlertManager};
 use agent_bastion_gateway::pii_redactor::PiiRedactor;
 use agent_bastion_gateway::proxy::{self as gateway_proxy, GatewayState};
 use agent_bastion_gateway::quota::QuotaManager;
@@ -68,11 +68,7 @@ fn security_layers<S: Clone + Send + Sync + 'static>(router: Router<S>) -> Route
 // Gateway server (port 3000) — AI API + MCP, exposed to downstream clients
 // ---------------------------------------------------------------------------
 
-pub fn create_gateway_app(
-    config: &AppConfig,
-    state: AppState,
-    jwt: Arc<JwtManager>,
-) -> Router {
+pub fn create_gateway_app(_config: &AppConfig, state: AppState, jwt: Arc<JwtManager>) -> Router {
     // AI Gateway: /v1/*
     let model_router = Arc::new(ModelRouter::new());
     let gateway_state = GatewayState {
@@ -91,7 +87,10 @@ pub fn create_gateway_app(
         ))),
     };
     let ai_routes = Router::new()
-        .route("/v1/chat/completions", post(gateway_proxy::proxy_chat_completion))
+        .route(
+            "/v1/chat/completions",
+            post(gateway_proxy::proxy_chat_completion),
+        )
         .route("/v1/models", get(gateway_proxy::list_models_handler))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -116,8 +115,7 @@ pub fn create_gateway_app(
         .with_state(mcp_state);
 
     // Health check
-    let health = Router::new()
-        .route("/health", get(handlers::health::health_check));
+    let health = Router::new().route("/health", get(handlers::health::health_check));
 
     let app = Router::new()
         .merge(health)
@@ -147,7 +145,13 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
 
         CorsLayer::new()
             .allow_origin(origins)
-            .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PATCH, Method::OPTIONS])
+            .allow_methods([
+                Method::GET,
+                Method::POST,
+                Method::DELETE,
+                Method::PATCH,
+                Method::OPTIONS,
+            ])
             .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT])
             .allow_credentials(true)
     };
@@ -166,7 +170,10 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
         .route("/api/auth/me", get(handlers::auth::me))
         .route("/api/auth/password", post(handlers::auth::change_password))
         .route("/api/auth/account", delete(handlers::auth::delete_account))
-        .route("/api/auth/revoke-sessions", post(handlers::auth::revoke_sessions))
+        .route(
+            "/api/auth/revoke-sessions",
+            post(handlers::auth::revoke_sessions),
+        )
         .route(
             "/api/keys",
             get(handlers::api_keys::list_keys).post(handlers::api_keys::create_key),
@@ -178,9 +185,15 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
         .route("/api/mcp/tools", get(handlers::mcp_tools::list_tools))
         .route("/api/audit/logs", get(handlers::audit::list_audit_logs))
         .route("/api/analytics/usage", get(handlers::analytics::get_usage))
-        .route("/api/analytics/usage/stats", get(handlers::analytics::get_usage_stats))
+        .route(
+            "/api/analytics/usage/stats",
+            get(handlers::analytics::get_usage_stats),
+        )
         .route("/api/analytics/costs", get(handlers::analytics::get_costs))
-        .route("/api/analytics/costs/stats", get(handlers::analytics::get_cost_stats))
+        .route(
+            "/api/analytics/costs/stats",
+            get(handlers::analytics::get_cost_stats),
+        )
         .route("/api/health", get(handlers::health::api_health_check))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -221,9 +234,18 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
             "/api/admin/users/{id}/force-logout",
             post(handlers::admin::force_logout_user),
         )
-        .route("/api/admin/settings/system", get(handlers::admin::get_system_settings))
-        .route("/api/admin/settings/oidc", get(handlers::admin::get_oidc_settings))
-        .route("/api/admin/settings/audit", get(handlers::admin::get_audit_settings))
+        .route(
+            "/api/admin/settings/system",
+            get(handlers::admin::get_system_settings),
+        )
+        .route(
+            "/api/admin/settings/oidc",
+            get(handlers::admin::get_oidc_settings),
+        )
+        .route(
+            "/api/admin/settings/audit",
+            get(handlers::admin::get_audit_settings),
+        )
         // Log forwarders CRUD
         .route(
             "/api/admin/log-forwarders",
@@ -261,8 +283,7 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
         ));
 
     // Public health check (no internal details)
-    let health = Router::new()
-        .route("/health", get(handlers::health::health_check));
+    let health = Router::new().route("/health", get(handlers::health::health_check));
 
     let app = Router::new()
         .merge(health)

@@ -1,5 +1,5 @@
-use axum::extract::State;
 use axum::Json;
+use axum::extract::State;
 use serde::Deserialize;
 
 use agent_bastion_auth::password;
@@ -27,7 +27,9 @@ pub async fn login(
 ) -> Result<Json<LoginResponse>, AppError> {
     // Input validation
     if req.password.len() < 8 {
-        return Err(AppError::BadRequest("Password must be at least 8 characters".into()));
+        return Err(AppError::BadRequest(
+            "Password must be at least 8 characters".into(),
+        ));
     }
     if !req.email.contains('@') || !req.email.contains('.') {
         return Err(AppError::BadRequest("Invalid email format".into()));
@@ -44,20 +46,26 @@ pub async fn login(
             .unwrap_or(());
     }
     if count > 10 {
-        return Err(AppError::BadRequest("Too many login attempts. Please try again later.".into()));
+        return Err(AppError::BadRequest(
+            "Too many login attempts. Please try again later.".into(),
+        ));
     }
 
     // Constant-time login: always perform Argon2 verify to prevent user enumeration
     let dummy_hash = "$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-    let maybe_user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = $1 AND is_active = true")
-        .bind(&req.email)
-        .fetch_optional(&state.db)
-        .await?;
+    let maybe_user =
+        sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = $1 AND is_active = true")
+            .bind(&req.email)
+            .fetch_optional(&state.db)
+            .await?;
 
     let (user, password_hash) = match maybe_user {
         Some(u) => {
-            let hash = u.password_hash.clone().unwrap_or_else(|| dummy_hash.to_string());
+            let hash = u
+                .password_hash
+                .clone()
+                .unwrap_or_else(|| dummy_hash.to_string());
             (Some(u), hash)
         }
         None => (None, dummy_hash.to_string()),
@@ -69,19 +77,19 @@ pub async fn login(
     if !password_valid || user.is_none() {
         // Log failed attempt
         state.audit.log(
-            AuditEntry::new("auth.login_failed")
-                .detail(serde_json::json!({"email": req.email})),
+            AuditEntry::new("auth.login_failed").detail(serde_json::json!({"email": req.email})),
         );
         return Err(AppError::Unauthorized);
     }
     let user = user.unwrap(); // Safe: checked above
 
     // Fetch user roles
-    let roles: Vec<String> =
-        sqlx::query_scalar("SELECT r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = $1")
-            .bind(user.id)
-            .fetch_all(&state.db)
-            .await?;
+    let roles: Vec<String> = sqlx::query_scalar(
+        "SELECT r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = $1",
+    )
+    .bind(user.id)
+    .fetch_all(&state.db)
+    .await?;
 
     let access_token = state
         .jwt
@@ -115,17 +123,20 @@ pub async fn register(
 ) -> Result<Json<UserResponse>, AppError> {
     // Input validation
     if req.password.len() < 8 {
-        return Err(AppError::BadRequest("Password must be at least 8 characters".into()));
+        return Err(AppError::BadRequest(
+            "Password must be at least 8 characters".into(),
+        ));
     }
     if !req.email.contains('@') || !req.email.contains('.') {
         return Err(AppError::BadRequest("Invalid email format".into()));
     }
 
     // Check if user already exists
-    let exists = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)")
-        .bind(&req.email)
-        .fetch_one(&state.db)
-        .await?;
+    let exists =
+        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)")
+            .bind(&req.email)
+            .fetch_one(&state.db)
+            .await?;
 
     if exists {
         return Err(AppError::Conflict("Email already registered".into()));
@@ -174,9 +185,10 @@ pub async fn refresh(
         return Err(AppError::BadRequest("Invalid token type".into()));
     }
 
-    let access_token = state
-        .jwt
-        .create_access_token(claims.sub, &claims.email, claims.roles.clone())?;
+    let access_token =
+        state
+            .jwt
+            .create_access_token(claims.sub, &claims.email, claims.roles.clone())?;
     let refresh_token = state
         .jwt
         .create_refresh_token(claims.sub, &claims.email, claims.roles)?;
@@ -219,7 +231,9 @@ pub async fn change_password(
     Json(req): Json<ChangePasswordRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     if req.new_password.len() < 8 {
-        return Err(AppError::BadRequest("New password must be at least 8 characters".into()));
+        return Err(AppError::BadRequest(
+            "New password must be at least 8 characters".into(),
+        ));
     }
 
     let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
@@ -228,9 +242,10 @@ pub async fn change_password(
         .await?
         .ok_or(AppError::NotFound("User not found".into()))?;
 
-    let current_hash = user.password_hash.as_ref().ok_or(AppError::BadRequest(
-        "This account uses SSO login".into(),
-    ))?;
+    let current_hash = user
+        .password_hash
+        .as_ref()
+        .ok_or(AppError::BadRequest("This account uses SSO login".into()))?;
 
     if !password::verify_password(&req.old_password, current_hash)? {
         return Err(AppError::Unauthorized);
@@ -245,7 +260,8 @@ pub async fn change_password(
 
     // Revoke all signing keys for this user (invalidates sessions)
     let signing_key = format!("signing_key:{}", user.id);
-    let _: Result<(), _> = fred::interfaces::KeysInterface::del::<(), _>(&state.redis, &signing_key).await;
+    let _: Result<(), _> =
+        fred::interfaces::KeysInterface::del::<(), _>(&state.redis, &signing_key).await;
 
     state.audit.log(
         AuditEntry::new("auth.password_changed")
@@ -279,10 +295,9 @@ pub async fn delete_account(
         .execute(&state.db)
         .await?;
 
-    state.audit.log(
-        AuditEntry::new("user.account_deleted")
-            .user_id(user_id),
-    );
+    state
+        .audit
+        .log(AuditEntry::new("user.account_deleted").user_id(user_id));
 
     Ok(Json(serde_json::json!({"status": "deleted"})))
 }
@@ -295,12 +310,10 @@ pub async fn revoke_sessions(
     let user_id = auth_user.claims.sub;
 
     // Delete signing key (invalidates all signed requests)
-    let _: () = fred::interfaces::KeysInterface::del(
-        &state.redis,
-        &format!("signing_key:{user_id}"),
-    )
-    .await
-    .unwrap_or(());
+    let _: () =
+        fred::interfaces::KeysInterface::del(&state.redis, &format!("signing_key:{user_id}"))
+            .await
+            .unwrap_or(());
 
     state.audit.log(
         AuditEntry::new("auth.sessions_revoked")

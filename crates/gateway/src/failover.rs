@@ -1,11 +1,11 @@
+use crate::providers::DynAiProvider;
 use crate::providers::traits::{
     ChatCompletionChunk, ChatCompletionRequest, ChatCompletionResponse, GatewayError,
 };
-use crate::providers::DynAiProvider;
 use futures::Stream;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
@@ -65,16 +65,16 @@ impl FailoverBackend {
             return;
         }
         let guard = self.last_failure.read().await;
-        if let Some(ts) = *guard {
-            if ts.elapsed() >= Duration::from_secs(recovery_secs) {
-                drop(guard);
-                tracing::info!(
-                    provider = self.provider.name(),
-                    "Attempting health recovery for backend"
-                );
-                self.healthy.store(true, Ordering::Relaxed);
-                self.consecutive_failures.store(0, Ordering::Relaxed);
-            }
+        if let Some(ts) = *guard
+            && ts.elapsed() >= Duration::from_secs(recovery_secs)
+        {
+            drop(guard);
+            tracing::info!(
+                provider = self.provider.name(),
+                "Attempting health recovery for backend"
+            );
+            self.healthy.store(true, Ordering::Relaxed);
+            self.consecutive_failures.store(0, Ordering::Relaxed);
         }
     }
 }

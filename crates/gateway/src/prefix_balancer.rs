@@ -1,10 +1,10 @@
+use crate::providers::DynAiProvider;
 use crate::providers::traits::{
     ChatCompletionChunk, ChatCompletionRequest, ChatCompletionResponse, GatewayError,
 };
-use crate::providers::DynAiProvider;
 use futures::Stream;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -83,10 +83,10 @@ impl PrefixBalancer {
         // Check if we already have a mapping for this prefix
         {
             let map = self.prefix_map.read().await;
-            if let Some(&idx) = map.get(&hash) {
-                if idx < len {
-                    return idx;
-                }
+            if let Some(&idx) = map.get(&hash)
+                && idx < len
+            {
+                return idx;
             }
         }
 

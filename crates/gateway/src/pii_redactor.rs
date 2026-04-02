@@ -11,6 +11,7 @@ pub struct PiiRedactor {
 
 #[derive(Clone)]
 struct PiiPattern {
+    #[allow(dead_code)]
     name: &'static str,
     regex: Regex,
     placeholder_prefix: &'static str,
@@ -103,12 +104,10 @@ impl PiiRedactor {
                         .collect();
 
                     for matched_value in matches {
-                        let counter = counters
-                            .entry(pattern.placeholder_prefix)
-                            .or_insert(0);
+                        let counter = counters.entry(pattern.placeholder_prefix).or_insert(0);
                         *counter += 1;
                         let placeholder =
-                            format!("{{{{{}_{}}}}}",  pattern.placeholder_prefix, counter);
+                            format!("{{{{{}_{}}}}}", pattern.placeholder_prefix, counter);
                         replacements.insert(placeholder.clone(), matched_value.clone());
                         redacted_content =
                             redacted_content.replacen(&matched_value, &placeholder, 1);
@@ -126,11 +125,7 @@ impl PiiRedactor {
     }
 
     /// Restore placeholders in the response content back to original PII values.
-    pub fn restore_response(
-        &self,
-        response: &mut ChatCompletionResponse,
-        ctx: &RedactionContext,
-    ) {
+    pub fn restore_response(&self, response: &mut ChatCompletionResponse, ctx: &RedactionContext) {
         if ctx.replacements.is_empty() {
             return;
         }
@@ -279,9 +274,7 @@ mod tests {
         let messages = vec![user_msg("Email alice@example.com and bob@test.org")];
         let (_, ctx) = redactor.redact_messages(&messages);
 
-        let mut response = make_response(
-            "I found {{EMAIL_1}} and {{EMAIL_2}} in your message.",
-        );
+        let mut response = make_response("I found {{EMAIL_1}} and {{EMAIL_2}} in your message.");
         redactor.restore_response(&mut response, &ctx);
 
         let content = response.choices[0].message.content.as_str().unwrap();

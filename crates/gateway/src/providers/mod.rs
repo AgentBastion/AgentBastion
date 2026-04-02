@@ -21,7 +21,13 @@ pub trait DynAiProvider: Send + Sync {
     fn chat_completion_boxed(
         &self,
         request: ChatCompletionRequest,
-    ) -> Pin<Box<dyn std::future::Future<Output = Result<ChatCompletionResponse, GatewayError>> + Send + '_>>;
+    ) -> Pin<
+        Box<
+            dyn std::future::Future<Output = Result<ChatCompletionResponse, GatewayError>>
+                + Send
+                + '_,
+        >,
+    >;
 
     fn stream_chat_completion(
         &self,
@@ -37,7 +43,13 @@ impl<T: AiProvider> DynAiProvider for T {
     fn chat_completion_boxed(
         &self,
         request: ChatCompletionRequest,
-    ) -> Pin<Box<dyn std::future::Future<Output = Result<ChatCompletionResponse, GatewayError>> + Send + '_>> {
+    ) -> Pin<
+        Box<
+            dyn std::future::Future<Output = Result<ChatCompletionResponse, GatewayError>>
+                + Send
+                + '_,
+        >,
+    > {
         Box::pin(AiProvider::chat_completion(self, request))
     }
 

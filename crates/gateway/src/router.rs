@@ -30,8 +30,7 @@ impl ModelRouter {
     /// For example, registering `"gpt-4o"` will match the exact model name,
     /// and registering `"gpt-"` will match any model starting with `"gpt-"`.
     pub fn register_provider(&mut self, model_pattern: &str, provider: Arc<dyn DynAiProvider>) {
-        self.providers
-            .insert(model_pattern.to_string(), provider);
+        self.providers.insert(model_pattern.to_string(), provider);
     }
 
     /// Look up the provider for a given model name.

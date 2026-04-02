@@ -1,7 +1,7 @@
 use super::traits::*;
 use crate::sse_parser::SseStreamExt;
-use futures::stream::StreamExt;
 use futures::Stream;
+use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
@@ -75,7 +75,7 @@ struct MessageStartEvent {
 struct MessageStartMessage {
     id: String,
     model: String,
-    usage: Option<AnthropicUsage>,
+    _usage: Option<AnthropicUsage>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -87,7 +87,7 @@ struct ContentBlockDeltaEvent {
 #[derive(Debug, Deserialize)]
 struct ContentBlockDelta {
     #[serde(rename = "type")]
-    delta_type: String,
+    _delta_type: String,
     #[serde(default)]
     text: Option<String>,
 }
@@ -327,8 +327,8 @@ impl AiProvider for AnthropicProvider {
                                 }
                             }
                             "content_block_delta" => {
-                                if let Ok(ev) = serde_json::from_str::<ContentBlockDeltaEvent>(&data) {
-                                    if let Some(text) = &ev.delta.text {
+                                if let Ok(ev) = serde_json::from_str::<ContentBlockDeltaEvent>(&data)
+                                    && let Some(text) = &ev.delta.text {
                                         let chunk = ChatCompletionChunk {
                                             id: message_id.clone(),
                                             object: "chat.completion.chunk".to_string(),
@@ -343,7 +343,6 @@ impl AiProvider for AnthropicProvider {
                                         };
                                         yield Ok(chunk);
                                     }
-                                }
                             }
                             "message_delta" => {
                                 if let Ok(ev) = serde_json::from_str::<MessageDeltaEvent>(&data) {

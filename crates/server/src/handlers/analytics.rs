@@ -1,5 +1,5 @@
-use axum::extract::State;
 use axum::Json;
+use axum::extract::State;
 use chrono::Datelike;
 use serde::Serialize;
 
@@ -29,12 +29,11 @@ pub async fn get_usage_stats(
     .fetch_one(&state.db)
     .await?;
 
-    let total_requests: Option<i64> = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM usage_records WHERE created_at::date = $1",
-    )
-    .bind(today)
-    .fetch_one(&state.db)
-    .await?;
+    let total_requests: Option<i64> =
+        sqlx::query_scalar("SELECT COUNT(*) FROM usage_records WHERE created_at::date = $1")
+            .bind(today)
+            .fetch_one(&state.db)
+            .await?;
 
     Ok(Json(UsageStats {
         total_tokens_today: total_tokens.unwrap_or(0),

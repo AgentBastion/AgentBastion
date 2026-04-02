@@ -83,11 +83,7 @@ impl SessionManager {
     }
 
     /// Get the upstream session ID for a given server within a client session.
-    pub async fn get_upstream_session(
-        &self,
-        session_id: &str,
-        server_id: Uuid,
-    ) -> Option<String> {
+    pub async fn get_upstream_session(&self, session_id: &str, server_id: Uuid) -> Option<String> {
         let sessions = self.sessions.read().await;
         sessions
             .get(session_id)?

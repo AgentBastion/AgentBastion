@@ -85,12 +85,7 @@ impl AccessController {
     }
 
     /// Register (or overwrite) a policy for a tool.
-    pub async fn set_policy(
-        &self,
-        server_id: Uuid,
-        tool_name: String,
-        allowed_roles: Vec<String>,
-    ) {
+    pub async fn set_policy(&self, server_id: Uuid, tool_name: String, allowed_roles: Vec<String>) {
         let mut policies = self.policies.write().await;
         policies.insert(
             ToolKey {
@@ -143,14 +138,12 @@ mod tests {
             .await;
 
         let allowed = ac
-            .check_tool_access(
-                user_id,
-                server_id,
-                "dangerous_tool",
-                &["developer".into()],
-            )
+            .check_tool_access(user_id, server_id, "dangerous_tool", &["developer".into()])
             .await;
-        assert!(!allowed, "developer should be denied when policy requires admin");
+        assert!(
+            !allowed,
+            "developer should be denied when policy requires admin"
+        );
     }
 
     #[tokio::test]
@@ -175,16 +168,10 @@ mod tests {
         let server_id = Uuid::new_v4();
 
         // Set policy that allows NO roles (empty vec = deny all except super_admin)
-        ac.set_policy(server_id, "locked_tool".into(), vec![])
-            .await;
+        ac.set_policy(server_id, "locked_tool".into(), vec![]).await;
 
         let allowed = ac
-            .check_tool_access(
-                user_id,
-                server_id,
-                "locked_tool",
-                &["super_admin".into()],
-            )
+            .check_tool_access(user_id, server_id, "locked_tool", &["super_admin".into()])
             .await;
         assert!(allowed, "super_admin must always have access");
     }
@@ -195,8 +182,7 @@ mod tests {
         let user_id = Uuid::new_v4();
         let server_id = Uuid::new_v4();
 
-        ac.set_policy(server_id, "locked_tool".into(), vec![])
-            .await;
+        ac.set_policy(server_id, "locked_tool".into(), vec![]).await;
 
         let allowed = ac
             .check_tool_access(user_id, server_id, "locked_tool", &["admin".into()])

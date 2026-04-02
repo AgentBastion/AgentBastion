@@ -99,11 +99,7 @@ impl McpProxy {
     }
 
     /// Main entry point: dispatch a single JSON-RPC request from a client.
-    pub async fn handle_request(
-        &self,
-        user_id: Uuid,
-        request: JsonRpcRequest,
-    ) -> JsonRpcResponse {
+    pub async fn handle_request(&self, user_id: Uuid, request: JsonRpcRequest) -> JsonRpcResponse {
         match request.method.as_str() {
             "initialize" => self.handle_initialize(request).await,
             "tools/list" => self.handle_tools_list(user_id, request).await,
@@ -141,11 +137,7 @@ impl McpProxy {
     // tools/list
     // -----------------------------------------------------------------------
 
-    async fn handle_tools_list(
-        &self,
-        user_id: Uuid,
-        request: JsonRpcRequest,
-    ) -> JsonRpcResponse {
+    async fn handle_tools_list(&self, user_id: Uuid, request: JsonRpcRequest) -> JsonRpcResponse {
         let all_tools = self.registry.get_all_tools(None).await;
 
         let mut tools = Vec::new();
@@ -170,29 +162,18 @@ impl McpProxy {
             }));
         }
 
-        ok_response(
-            request.id,
-            serde_json::json!({ "tools": tools }),
-        )
+        ok_response(request.id, serde_json::json!({ "tools": tools }))
     }
 
     // -----------------------------------------------------------------------
     // tools/call
     // -----------------------------------------------------------------------
 
-    async fn handle_tools_call(
-        &self,
-        user_id: Uuid,
-        request: JsonRpcRequest,
-    ) -> JsonRpcResponse {
+    async fn handle_tools_call(&self, user_id: Uuid, request: JsonRpcRequest) -> JsonRpcResponse {
         let params = match &request.params {
             Some(p) => p,
             None => {
-                return err_response(
-                    request.id,
-                    INVALID_PARAMS,
-                    "Missing params for tools/call",
-                );
+                return err_response(request.id, INVALID_PARAMS, "Missing params for tools/call");
             }
         };
 
@@ -226,11 +207,7 @@ impl McpProxy {
             .check_tool_access_by_id(user_id, server.id, &original_tool_name)
             .await;
         if !allowed {
-            return err_response(
-                request.id,
-                INVALID_REQUEST,
-                "Access denied for this tool",
-            );
+            return err_response(request.id, INVALID_REQUEST, "Access denied for this tool");
         }
 
         // Build the upstream request with the original (un-namespaced) tool

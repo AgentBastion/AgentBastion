@@ -1,7 +1,7 @@
 use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreProviderMetadata};
 use openidconnect::{
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce,
-    RedirectUrl, Scope, TokenResponse, TokenUrl,
+    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, RedirectUrl,
+    Scope, TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -43,10 +43,9 @@ impl OidcManager {
         let issuer = IssuerUrl::new(issuer_url.to_string())?;
         let http_client = openidconnect::reqwest::Client::new();
 
-        let provider_metadata =
-            CoreProviderMetadata::discover_async(issuer.clone(), &http_client)
-                .await
-                .map_err(|e| anyhow::anyhow!("OIDC discovery failed: {e}"))?;
+        let provider_metadata = CoreProviderMetadata::discover_async(issuer.clone(), &http_client)
+            .await
+            .map_err(|e| anyhow::anyhow!("OIDC discovery failed: {e}"))?;
 
         let auth_url = provider_metadata.authorization_endpoint().clone();
         let token_url = provider_metadata
@@ -94,11 +93,7 @@ impl OidcManager {
     }
 
     /// Exchange authorization code for tokens, return user info.
-    pub async fn exchange_code(
-        &self,
-        code: &str,
-        nonce: &Nonce,
-    ) -> anyhow::Result<OidcUserInfo> {
+    pub async fn exchange_code(&self, code: &str, nonce: &Nonce) -> anyhow::Result<OidcUserInfo> {
         let client = CoreClient::from_provider_metadata(
             self.inner.provider_metadata.clone(),
             self.inner.client_id.clone(),

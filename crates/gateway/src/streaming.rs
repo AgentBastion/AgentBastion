@@ -1,7 +1,7 @@
 use crate::providers::traits::{ChatCompletionChunk, GatewayError};
 use axum::response::sse::{Event, KeepAlive, Sse};
-use futures::stream::StreamExt;
 use futures::Stream;
+use futures::stream::StreamExt;
 use std::convert::Infallible;
 use std::pin::Pin;
 

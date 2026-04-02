@@ -1,7 +1,7 @@
 use super::traits::*;
 use crate::sse_parser::SseStreamExt;
-use futures::stream::StreamExt;
 use futures::Stream;
+use futures::stream::StreamExt;
 use std::pin::Pin;
 
 pub struct OpenAiProvider {

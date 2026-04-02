@@ -1,6 +1,6 @@
 use axum::{
     extract::State,
-    http::{header::AUTHORIZATION, Request, StatusCode},
+    http::{Request, StatusCode, header::AUTHORIZATION},
     middleware::Next,
     response::Response,
 };
@@ -11,6 +11,7 @@ use crate::app::AppState;
 
 /// Authenticated identity for gateway requests (via `ab-` API key).
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct GatewayIdentity {
     pub api_key_id: uuid::Uuid,
     pub user_id: Option<uuid::Uuid>,
@@ -51,10 +52,10 @@ pub async fn require_api_key_or_jwt(
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
         // Check expiration
-        if let Some(expires_at) = row.expires_at {
-            if expires_at < chrono::Utc::now() {
-                return Err(StatusCode::UNAUTHORIZED);
-            }
+        if let Some(expires_at) = row.expires_at
+            && expires_at < chrono::Utc::now()
+        {
+            return Err(StatusCode::UNAUTHORIZED);
         }
 
         // Update last_used_at (best-effort, don't block on failure)

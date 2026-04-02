@@ -68,8 +68,7 @@ impl BudgetAlertManager {
 
         for &threshold in &self.config.thresholds {
             if ratio >= threshold {
-                let redis_key =
-                    format!("budget_alert:{key}:{period}:{:.0}", threshold * 100.0);
+                let redis_key = format!("budget_alert:{key}:{period}:{:.0}", threshold * 100.0);
 
                 // SET NX — only succeeds if the key does not already exist
                 let set_result: Result<bool, _> = fred::interfaces::KeysInterface::set(

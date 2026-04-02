@@ -1,5 +1,5 @@
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 
 pub async fn create_pool(database_url: &str) -> anyhow::Result<PgPool> {
     if !database_url.contains("sslmode=") {

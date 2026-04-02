@@ -4,7 +4,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use uuid::Uuid;
 
 use crate::models::LogForwarder;
@@ -88,8 +88,14 @@ mod tests {
             .user_agent("curl/8.0");
 
         assert_eq!(entry.action, "api.request");
-        assert_eq!(entry.user_id.as_deref(), Some(user_id.to_string()).as_deref());
-        assert_eq!(entry.api_key_id.as_deref(), Some(api_key_id.to_string()).as_deref());
+        assert_eq!(
+            entry.user_id.as_deref(),
+            Some(user_id.to_string()).as_deref()
+        );
+        assert_eq!(
+            entry.api_key_id.as_deref(),
+            Some(api_key_id.to_string()).as_deref()
+        );
         assert_eq!(entry.resource.as_deref(), Some("/v1/chat/completions"));
         assert_eq!(entry.detail, Some(detail));
         assert_eq!(entry.ip_address.as_deref(), Some("10.0.0.1"));
@@ -199,7 +205,13 @@ async fn reload_forwarders(db: &PgPool, registry: &ForwarderRegistry) {
         } else {
             None
         };
-        map.insert(row.id, ForwarderRuntime { config: row, udp_socket });
+        map.insert(
+            row.id,
+            ForwarderRuntime {
+                config: row,
+                udp_socket,
+            },
+        );
     }
 
     let mut guard = registry.write().await;
@@ -295,14 +307,22 @@ async fn forward_to_all(
 // ---------------------------------------------------------------------------
 
 fn send_udp_syslog(runtime: &ForwarderRuntime, entry: &AuditEntry) -> Result<(), String> {
-    let addr = runtime.config.config.get("address")
+    let addr = runtime
+        .config
+        .config
+        .get("address")
         .and_then(|v| v.as_str())
         .ok_or("Missing 'address' in udp_syslog config")?;
-    let facility: u8 = runtime.config.config.get("facility")
+    let facility: u8 = runtime
+        .config
+        .config
+        .get("facility")
         .and_then(|v| v.as_u64())
         .unwrap_or(16) as u8; // default: local0
 
-    let socket = runtime.udp_socket.as_ref()
+    let socket = runtime
+        .udp_socket
+        .as_ref()
         .ok_or("UDP socket not initialized")?;
 
     let severity = 6u8; // informational
@@ -331,16 +351,21 @@ fn send_udp_syslog(runtime: &ForwarderRuntime, entry: &AuditEntry) -> Result<(),
         resource = entry.resource.as_deref().unwrap_or("-"),
     );
 
-    socket.send_to(message.as_bytes(), addr)
+    socket
+        .send_to(message.as_bytes(), addr)
         .map(|_| ())
         .map_err(|e| format!("Syslog UDP send failed: {e}"))
 }
 
 async fn send_tcp_syslog(config: &LogForwarder, entry: &AuditEntry) -> Result<(), String> {
-    let addr = config.config.get("address")
+    let addr = config
+        .config
+        .get("address")
         .and_then(|v| v.as_str())
         .ok_or("Missing 'address' in tcp_syslog config")?;
-    let facility: u8 = config.config.get("facility")
+    let facility: u8 = config
+        .config
+        .get("facility")
         .and_then(|v| v.as_u64())
         .unwrap_or(16) as u8;
 
@@ -364,9 +389,11 @@ async fn send_tcp_syslog(config: &LogForwarder, entry: &AuditEntry) -> Result<()
         resource = entry.resource.as_deref().unwrap_or("-"),
     );
 
-    let mut stream = tokio::net::TcpStream::connect(addr).await
+    let mut stream = tokio::net::TcpStream::connect(addr)
+        .await
         .map_err(|e| format!("TCP syslog connect failed: {e}"))?;
-    tokio::io::AsyncWriteExt::write_all(&mut stream, message.as_bytes()).await
+    tokio::io::AsyncWriteExt::write_all(&mut stream, message.as_bytes())
+        .await
         .map_err(|e| format!("TCP syslog write failed: {e}"))
 }
 
@@ -376,10 +403,14 @@ async fn send_kafka(
     entry: &AuditEntry,
 ) -> Result<(), String> {
     // Kafka via REST proxy (Confluent-compatible)
-    let broker_url = config.config.get("broker_url")
+    let broker_url = config
+        .config
+        .get("broker_url")
         .and_then(|v| v.as_str())
         .ok_or("Missing 'broker_url' in kafka config")?;
-    let topic = config.config.get("topic")
+    let topic = config
+        .config
+        .get("topic")
         .and_then(|v| v.as_str())
         .ok_or("Missing 'topic' in kafka config")?;
 
@@ -390,7 +421,8 @@ async fn send_kafka(
     });
 
     let url = format!("{}/topics/{}", broker_url.trim_end_matches('/'), topic);
-    let resp = client.post(&url)
+    let resp = client
+        .post(&url)
         .header("Content-Type", "application/vnd.kafka.json.v2+json")
         .json(&payload)
         .send()
@@ -410,11 +442,14 @@ async fn send_webhook(
     config: &LogForwarder,
     entry: &AuditEntry,
 ) -> Result<(), String> {
-    let url = config.config.get("url")
+    let url = config
+        .config
+        .get("url")
         .and_then(|v| v.as_str())
         .ok_or("Missing 'url' in webhook config")?;
 
-    let mut req = client.post(url)
+    let mut req = client
+        .post(url)
         .header("Content-Type", "application/json")
         .json(entry);
 
@@ -423,7 +458,9 @@ async fn send_webhook(
         req = req.header("Authorization", token);
     }
 
-    let resp = req.send().await
+    let resp = req
+        .send()
+        .await
         .map_err(|e| format!("Webhook request failed: {e}"))?;
 
     if resp.status().is_success() {
@@ -441,7 +478,14 @@ async fn send_webhook(
 
 fn sanitize_detail(detail: &mut Option<serde_json::Value>) {
     if let Some(serde_json::Value::Object(map)) = detail {
-        let sensitive_keys = ["password", "secret", "api_key", "token", "authorization", "key_hash"];
+        let sensitive_keys = [
+            "password",
+            "secret",
+            "api_key",
+            "token",
+            "authorization",
+            "key_hash",
+        ];
         for key in &sensitive_keys {
             map.remove(*key);
         }

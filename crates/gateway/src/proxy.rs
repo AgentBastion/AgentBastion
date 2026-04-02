@@ -1,7 +1,7 @@
+use axum::Json;
 use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
-use axum::Json;
 use std::sync::Arc;
 
 use crate::budget_alert::BudgetAlertManager;
@@ -67,8 +67,7 @@ pub async fn proxy_chat_completion(
     }
 
     // 4. PII redaction — redact user messages before sending upstream
-    let (redacted_messages, redaction_ctx) =
-        state.pii_redactor.redact_messages(&request.messages);
+    let (redacted_messages, redaction_ctx) = state.pii_redactor.redact_messages(&request.messages);
     request.messages = redacted_messages;
 
     // 5. Check token quota (using model name as quota key for now;
@@ -82,31 +81,23 @@ pub async fn proxy_chat_completion(
     let is_stream = request.stream.unwrap_or(false);
 
     // 6. Cache lookup (non-streaming only)
-    if !is_stream {
-        if let Some(cached) = state.cache.get(&request).await {
-            tracing::debug!(model = %request.model, "Cache HIT");
-            let mut response = Json(&cached).into_response();
-            response
-                .headers_mut()
-                .insert("X-Cache", "HIT".parse().unwrap());
-            response.headers_mut().insert(
-                "X-Metadata-Request-Id",
-                metadata.request_id.parse().unwrap(),
-            );
-            return Ok(response);
-        }
+    if !is_stream && let Some(cached) = state.cache.get(&request).await {
+        tracing::debug!(model = %request.model, "Cache HIT");
+        let mut response = Json(&cached).into_response();
+        response
+            .headers_mut()
+            .insert("X-Cache", "HIT".parse().unwrap());
+        response.headers_mut().insert(
+            "X-Metadata-Request-Id",
+            metadata.request_id.parse().unwrap(),
+        );
+        return Ok(response);
     }
 
     // 7. Route to provider
-    let provider = state
-        .router
-        .route(&request.model)
-        .ok_or_else(|| {
-            GatewayError::ProviderError(format!(
-                "No provider found for model: {}",
-                request.model
-            ))
-        })?;
+    let provider = state.router.route(&request.model).ok_or_else(|| {
+        GatewayError::ProviderError(format!("No provider found for model: {}", request.model))
+    })?;
 
     if is_stream {
         let stream = provider.stream_chat_completion(request);
@@ -165,9 +156,7 @@ pub async fn proxy_chat_completion(
 /// GET /v1/models
 ///
 /// Returns the list of available models in OpenAI-compatible format.
-pub async fn list_models_handler(
-    State(state): State<GatewayState>,
-) -> Json<serde_json::Value> {
+pub async fn list_models_handler(State(state): State<GatewayState>) -> Json<serde_json::Value> {
     let models = state.router.list_models();
 
     let model_objects: Vec<serde_json::Value> = models

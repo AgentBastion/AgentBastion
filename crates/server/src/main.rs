@@ -44,13 +44,21 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize OIDC if configured (all fields validated by oidc_enabled())
     let oidc_manager = if config.oidc_enabled() {
-        let issuer = config.oidc_issuer_url.as_deref()
+        let issuer = config
+            .oidc_issuer_url
+            .as_deref()
             .ok_or_else(|| anyhow::anyhow!("OIDC_ISSUER_URL required when OIDC is enabled"))?;
-        let client_id = config.oidc_client_id.as_deref()
+        let client_id = config
+            .oidc_client_id
+            .as_deref()
             .ok_or_else(|| anyhow::anyhow!("OIDC_CLIENT_ID required when OIDC is enabled"))?;
-        let client_secret = config.oidc_client_secret.as_deref()
+        let client_secret = config
+            .oidc_client_secret
+            .as_deref()
             .ok_or_else(|| anyhow::anyhow!("OIDC_CLIENT_SECRET required when OIDC is enabled"))?;
-        let redirect = config.oidc_redirect_url.as_deref()
+        let redirect = config
+            .oidc_redirect_url
+            .as_deref()
             .unwrap_or("http://localhost:3001/api/auth/sso/callback");
 
         match OidcManager::discover(issuer, client_id, client_secret, redirect).await {

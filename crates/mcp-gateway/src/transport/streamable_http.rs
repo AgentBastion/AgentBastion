@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use agent_bastion_auth::jwt::JwtManager;
+use axum::Json;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
-use axum::Json;
 
-use crate::proxy::{err_response, JsonRpcRequest, INVALID_REQUEST};
 use crate::proxy::McpProxy;
+use crate::proxy::{INVALID_REQUEST, JsonRpcRequest, err_response};
 use crate::session::SessionManager;
 
 /// Shared application state for the MCP gateway Axum handlers.
@@ -54,7 +54,11 @@ pub async fn handle_post(
     let claims = match state.jwt_manager.verify_token(token) {
         Ok(c) => c,
         Err(_) => {
-            let resp = err_response(request.id.clone(), INVALID_REQUEST, "Invalid or expired token");
+            let resp = err_response(
+                request.id.clone(),
+                INVALID_REQUEST,
+                "Invalid or expired token",
+            );
             return (StatusCode::UNAUTHORIZED, Json(resp)).into_response();
         }
     };

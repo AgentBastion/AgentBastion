@@ -96,30 +96,30 @@ impl RateLimiter {
         }
 
         // Atomic TPM check (optional)
-        if let (Some(limit), Some(tokens)) = (tpm_limit, estimated_tokens) {
-            if tokens > 0 {
-                let tpm_key = format!("ratelimit:tpm:{key}");
-                let member_with_tokens = format!("{member_id}:{tokens}");
+        if let (Some(limit), Some(tokens)) = (tpm_limit, estimated_tokens)
+            && tokens > 0
+        {
+            let tpm_key = format!("ratelimit:tpm:{key}");
+            let member_with_tokens = format!("{member_id}:{tokens}");
 
-                let allowed: i64 = self
-                    .redis
-                    .eval(
-                        LUA_TPM_CHECK,
-                        vec![tpm_key.as_str()],
-                        vec![
-                            window_start.to_string(),
-                            now_ms.to_string(),
-                            member_with_tokens,
-                            tokens.to_string(),
-                            limit.to_string(),
-                        ],
-                    )
-                    .await
-                    .unwrap_or(1); // Fail open on TPM errors
+            let allowed: i64 = self
+                .redis
+                .eval(
+                    LUA_TPM_CHECK,
+                    vec![tpm_key.as_str()],
+                    vec![
+                        window_start.to_string(),
+                        now_ms.to_string(),
+                        member_with_tokens,
+                        tokens.to_string(),
+                        limit.to_string(),
+                    ],
+                )
+                .await
+                .unwrap_or(1); // Fail open on TPM errors
 
-                if allowed == 0 {
-                    return Err(AppError::RateLimited);
-                }
+            if allowed == 0 {
+                return Err(AppError::RateLimited);
             }
         }
 

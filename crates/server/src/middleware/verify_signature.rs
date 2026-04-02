@@ -119,18 +119,17 @@ pub async fn verify_signature(
     }
 
     // Get signing key from Redis
-    let signing_key_hex: Option<String> = fred::interfaces::KeysInterface::get(
-        &state.redis,
-        &format!("signing_key:{user_id}"),
-    )
-    .await
-    .unwrap_or(None);
+    let signing_key_hex: Option<String> =
+        fred::interfaces::KeysInterface::get(&state.redis, &format!("signing_key:{user_id}"))
+            .await
+            .unwrap_or(None);
 
     let signing_key_hex = signing_key_hex.ok_or_else(|| {
         tracing::warn!("No signing key found for user {user_id}");
         StatusCode::UNAUTHORIZED
     })?;
-    let signing_key = hex::decode(&signing_key_hex).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let signing_key =
+        hex::decode(&signing_key_hex).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Parse expected signature
     let expected_hex = signature_header
@@ -159,8 +158,11 @@ pub async fn verify_signature(
     if signing_key.len() != 32 {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
-    let mac_key = hmac::digest::Key::<HmacSha256>::from_slice(&signing_key);
-    let mut mac = HmacSha256::new(mac_key);
+    let mac_key: hmac::digest::Key<HmacSha256> = signing_key
+        .as_slice()
+        .try_into()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut mac = HmacSha256::new(&mac_key);
     mac.update(string_to_sign.as_bytes());
 
     // Constant-time comparison via hmac::Mac::verify_slice

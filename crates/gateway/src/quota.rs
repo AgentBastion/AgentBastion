@@ -58,11 +58,7 @@ impl QuotaManager {
             return Ok(u64::MAX);
         }
 
-        let used: u64 = self
-            .redis
-            .get(Self::usage_key(key))
-            .await
-            .unwrap_or(0);
+        let used: u64 = self.redis.get(Self::usage_key(key)).await.unwrap_or(0);
 
         if used >= limit {
             return Err(AppError::BadRequest(format!(
@@ -93,29 +89,17 @@ impl QuotaManager {
             .await
             .unwrap_or(());
 
-        let limit: u64 = self
-            .redis
-            .get(Self::limit_key(key))
-            .await
-            .unwrap_or(0);
+        let limit: u64 = self.redis.get(Self::limit_key(key)).await.unwrap_or(0);
 
         Ok(limit.saturating_sub(new_used))
     }
 
     /// Get current usage for a quota key.
     pub async fn get_usage(&self, key: &str) -> Result<QuotaInfo, AppError> {
-        let limit: u64 = self
-            .redis
-            .get(Self::limit_key(key))
-            .await
-            .unwrap_or(0);
+        let limit: u64 = self.redis.get(Self::limit_key(key)).await.unwrap_or(0);
 
         let period = Self::current_month();
-        let used: u64 = self
-            .redis
-            .get(Self::usage_key(key))
-            .await
-            .unwrap_or(0);
+        let used: u64 = self.redis.get(Self::usage_key(key)).await.unwrap_or(0);
 
         let remaining = limit.saturating_sub(used);
 
@@ -173,13 +157,7 @@ return limit - used - tokens
     /// Set/update quota limit for a key.
     pub async fn set_limit(&self, key: &str, monthly_limit: u64) -> Result<(), AppError> {
         self.redis
-            .set::<(), _, _>(
-                Self::limit_key(key),
-                monthly_limit,
-                None,
-                None,
-                false,
-            )
+            .set::<(), _, _>(Self::limit_key(key), monthly_limit, None, None, false)
             .await
             .map_err(|e| {
                 tracing::warn!("Quota set_limit failed: {e}");

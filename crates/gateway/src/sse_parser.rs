@@ -6,7 +6,7 @@
 //! Spec: https://html.spec.whatwg.org/multipage/server-sent-events.html
 
 use bytes::Bytes;
-use futures::stream::{Stream, StreamExt};
+use futures::stream::Stream;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -71,10 +71,10 @@ where
                 Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
                 Poll::Ready(None) => {
                     // Stream ended — try to flush any remaining data as a final event.
-                    if !this.buffer.trim().is_empty() {
-                        if let Some(event) = try_parse_event_force(&mut this.buffer) {
-                            return Poll::Ready(Some(Ok(event)));
-                        }
+                    if !this.buffer.trim().is_empty()
+                        && let Some(event) = try_parse_event_force(&mut this.buffer)
+                    {
+                        return Poll::Ready(Some(Ok(event)));
                     }
                     return Poll::Ready(None);
                 }

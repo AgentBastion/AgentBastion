@@ -124,10 +124,10 @@ impl ConnectionPool {
         let resp = builder.json(request).send().await?;
 
         // Capture the upstream session ID from the response header.
-        if let Some(sid) = resp.headers().get("mcp-session-id") {
-            if let Ok(s) = sid.to_str() {
-                conn.set_session_id(s.to_owned()).await;
-            }
+        if let Some(sid) = resp.headers().get("mcp-session-id")
+            && let Ok(s) = sid.to_str()
+        {
+            conn.set_session_id(s.to_owned()).await;
         }
 
         let status = resp.status();

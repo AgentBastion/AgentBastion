@@ -65,10 +65,7 @@ impl ResponseCache {
     }
 
     /// Look up a cached response.
-    pub async fn get(
-        &self,
-        request: &ChatCompletionRequest,
-    ) -> Option<ChatCompletionResponse> {
+    pub async fn get(&self, request: &ChatCompletionRequest) -> Option<ChatCompletionResponse> {
         if !Self::is_cacheable(request) {
             return None;
         }

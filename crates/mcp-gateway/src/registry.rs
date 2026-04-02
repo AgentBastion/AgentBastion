@@ -55,7 +55,9 @@ pub struct Registry {
 fn validate_tool_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 255
-        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
 }
 
 impl Registry {
@@ -103,7 +105,10 @@ impl Registry {
     pub async fn update_tools(&self, id: Uuid, tools: Vec<McpToolInfo>) {
         let mut servers = self.inner.write().await;
         if let Some(server) = servers.get_mut(&id) {
-            server.tools = tools.into_iter().filter(|t| validate_tool_name(&t.name)).collect();
+            server.tools = tools
+                .into_iter()
+                .filter(|t| validate_tool_name(&t.name))
+                .collect();
         }
     }
 
@@ -120,10 +125,7 @@ impl Registry {
         }
 
         let servers = self.inner.read().await;
-        let server = servers
-            .values()
-            .find(|s| s.name == server_name)?
-            .clone();
+        let server = servers.values().find(|s| s.name == server_name)?.clone();
 
         Some((server, tool_name.to_owned()))
     }
@@ -138,14 +140,13 @@ impl Registry {
         let mut result = Vec::new();
 
         for server in servers.values() {
-            if let Some(ids) = filter_server_ids {
-                if !ids.contains(&server.id) {
-                    continue;
-                }
+            if let Some(ids) = filter_server_ids
+                && !ids.contains(&server.id)
+            {
+                continue;
             }
             for tool in &server.tools {
-                let namespaced =
-                    format!("{}{NAMESPACE_SEPARATOR}{}", server.name, tool.name);
+                let namespaced = format!("{}{NAMESPACE_SEPARATOR}{}", server.name, tool.name);
                 result.push((namespaced, tool.clone()));
             }
         }
@@ -240,6 +241,10 @@ mod tests {
         // Filter to s1 only
         let filtered = reg.get_all_tools(Some(&[s1_id])).await;
         assert_eq!(filtered.len(), 2);
-        assert!(filtered.iter().all(|(name, _)| name.starts_with("github__")));
+        assert!(
+            filtered
+                .iter()
+                .all(|(name, _)| name.starts_with("github__"))
+        );
     }
 }

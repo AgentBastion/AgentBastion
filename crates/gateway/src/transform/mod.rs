@@ -8,14 +8,7 @@ pub fn normalize_model_name(model: &str) -> &str {
     // Strip "provider/" prefix if present
     if let Some(idx) = model.find('/') {
         let prefix = &model[..idx];
-        let known_prefixes = [
-            "openai",
-            "anthropic",
-            "google",
-            "azure",
-            "custom",
-            "vertex",
-        ];
+        let known_prefixes = ["openai", "anthropic", "google", "azure", "custom", "vertex"];
         if known_prefixes.contains(&prefix) {
             return &model[idx + 1..];
         }
@@ -56,19 +49,17 @@ pub fn detect_provider(model: &str) -> &'static str {
 pub fn extract_text_content(content: &serde_json::Value) -> String {
     match content {
         serde_json::Value::String(s) => s.clone(),
-        serde_json::Value::Array(parts) => {
-            parts
-                .iter()
-                .filter_map(|part| {
-                    if part.get("type").and_then(|t| t.as_str()) == Some("text") {
-                        part.get("text").and_then(|t| t.as_str()).map(String::from)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("")
-        }
+        serde_json::Value::Array(parts) => parts
+            .iter()
+            .filter_map(|part| {
+                if part.get("type").and_then(|t| t.as_str()) == Some("text") {
+                    part.get("text").and_then(|t| t.as_str()).map(String::from)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(""),
         other => other.to_string(),
     }
 }

@@ -44,8 +44,14 @@ mod tests {
     #[test]
     fn generate_api_key_has_correct_prefix() {
         let key = generate_api_key();
-        assert!(key.plaintext.starts_with("ab-"), "key should start with ab- prefix");
-        assert!(key.prefix.starts_with("ab-"), "prefix should start with ab-");
+        assert!(
+            key.plaintext.starts_with("ab-"),
+            "key should start with ab- prefix"
+        );
+        assert!(
+            key.prefix.starts_with("ab-"),
+            "prefix should start with ab-"
+        );
         assert_eq!(key.prefix.len(), 11, "prefix should be 11 chars (ab- + 8)");
     }
 

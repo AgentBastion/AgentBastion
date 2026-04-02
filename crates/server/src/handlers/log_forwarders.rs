@@ -1,5 +1,5 @@
-use axum::extract::{Path, State};
 use axum::Json;
+use axum::extract::{Path, State};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -15,11 +15,10 @@ pub async fn list_forwarders(
     _auth_user: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<LogForwarder>>, AppError> {
-    let forwarders = sqlx::query_as::<_, LogForwarder>(
-        "SELECT * FROM log_forwarders ORDER BY created_at DESC",
-    )
-    .fetch_all(&state.db)
-    .await?;
+    let forwarders =
+        sqlx::query_as::<_, LogForwarder>("SELECT * FROM log_forwarders ORDER BY created_at DESC")
+            .fetch_all(&state.db)
+            .await?;
 
     Ok(Json(forwarders))
 }
@@ -67,7 +66,7 @@ pub async fn create_forwarder(
     state.audit.log(
         agent_bastion_common::audit::AuditEntry::new("log_forwarder.created")
             .user_id(_auth_user.claims.sub)
-            .resource(&format!("log_forwarder:{}", forwarder.id)),
+            .resource(format!("log_forwarder:{}", forwarder.id)),
     );
 
     Ok(Json(forwarder))
@@ -88,13 +87,11 @@ pub async fn update_forwarder(
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateForwarderRequest>,
 ) -> Result<Json<LogForwarder>, AppError> {
-    let existing = sqlx::query_as::<_, LogForwarder>(
-        "SELECT * FROM log_forwarders WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or_else(|| AppError::NotFound("Forwarder not found".into()))?;
+    let existing = sqlx::query_as::<_, LogForwarder>("SELECT * FROM log_forwarders WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Forwarder not found".into()))?;
 
     if let Some(ref config) = req.config {
         validate_forwarder_config(&existing.forwarder_type, config)?;
@@ -141,7 +138,7 @@ pub async fn delete_forwarder(
     state.audit.log(
         agent_bastion_common::audit::AuditEntry::new("log_forwarder.deleted")
             .user_id(_auth_user.claims.sub)
-            .resource(&format!("log_forwarder:{id}")),
+            .resource(format!("log_forwarder:{id}")),
     );
 
     Ok(Json(serde_json::json!({"status": "deleted"})))
@@ -165,11 +162,15 @@ pub async fn toggle_forwarder(
 
     state.audit.reload_forwarders().await;
 
-    let action = if updated.enabled { "log_forwarder.resumed" } else { "log_forwarder.paused" };
+    let action = if updated.enabled {
+        "log_forwarder.resumed"
+    } else {
+        "log_forwarder.paused"
+    };
     state.audit.log(
         agent_bastion_common::audit::AuditEntry::new(action)
             .user_id(_auth_user.claims.sub)
-            .resource(&format!("log_forwarder:{id}")),
+            .resource(format!("log_forwarder:{id}")),
     );
 
     Ok(Json(updated))
@@ -207,17 +208,15 @@ pub async fn test_forwarder(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<TestResult>, AppError> {
-    let forwarder = sqlx::query_as::<_, LogForwarder>(
-        "SELECT * FROM log_forwarders WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or_else(|| AppError::NotFound("Forwarder not found".into()))?;
+    let forwarder = sqlx::query_as::<_, LogForwarder>("SELECT * FROM log_forwarders WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Forwarder not found".into()))?;
 
     let test_entry = agent_bastion_common::audit::AuditEntry::new("log_forwarder.test")
         .user_id(_auth_user.claims.sub)
-        .resource(&format!("log_forwarder:{id}"));
+        .resource(format!("log_forwarder:{id}"));
 
     // Send test message and report result
     let http_client = reqwest::Client::new();
@@ -225,9 +224,16 @@ pub async fn test_forwarder(
         "udp_syslog" | "tcp_syslog" => {
             let addr = match forwarder.config.get("address").and_then(|v| v.as_str()) {
                 Some(a) => a.to_string(),
-                None => return Ok(Json(TestResult { success: false, message: "Missing 'address' in config".into() })),
+                None => {
+                    return Ok(Json(TestResult {
+                        success: false,
+                        message: "Missing 'address' in config".into(),
+                    }));
+                }
             };
-            let facility: u8 = forwarder.config.get("facility")
+            let facility: u8 = forwarder
+                .config
+                .get("facility")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(16) as u8;
             let priority = facility * 8 + 6u8;
@@ -237,7 +243,8 @@ pub async fn test_forwarder(
             );
             if forwarder.forwarder_type == "udp_syslog" {
                 match std::net::UdpSocket::bind("0.0.0.0:0") {
-                    Ok(socket) => socket.send_to(msg.as_bytes(), &addr)
+                    Ok(socket) => socket
+                        .send_to(msg.as_bytes(), &addr)
                         .map(|_| ())
                         .map_err(|e| format!("UDP send failed: {e}")),
                     Err(e) => Err(format!("Failed to bind UDP socket: {e}")),
@@ -245,7 +252,8 @@ pub async fn test_forwarder(
             } else {
                 match tokio::net::TcpStream::connect(&addr).await {
                     Ok(mut stream) => {
-                        tokio::io::AsyncWriteExt::write_all(&mut stream, msg.as_bytes()).await
+                        tokio::io::AsyncWriteExt::write_all(&mut stream, msg.as_bytes())
+                            .await
                             .map_err(|e| format!("TCP write failed: {e}"))
                     }
                     Err(e) => Err(format!("TCP connect failed: {e}")),
@@ -255,9 +263,15 @@ pub async fn test_forwarder(
         "webhook" => {
             let url = match forwarder.config.get("url").and_then(|v| v.as_str()) {
                 Some(u) => u.to_string(),
-                None => return Ok(Json(TestResult { success: false, message: "Missing 'url' in config".into() })),
+                None => {
+                    return Ok(Json(TestResult {
+                        success: false,
+                        message: "Missing 'url' in config".into(),
+                    }));
+                }
             };
-            let mut req = http_client.post(&url)
+            let mut req = http_client
+                .post(&url)
                 .header("Content-Type", "application/json")
                 .json(&test_entry);
             if let Some(token) = forwarder.config.get("auth_header").and_then(|v| v.as_str()) {
@@ -272,15 +286,26 @@ pub async fn test_forwarder(
         "kafka" => {
             let broker_url = match forwarder.config.get("broker_url").and_then(|v| v.as_str()) {
                 Some(u) => u.to_string(),
-                None => return Ok(Json(TestResult { success: false, message: "Missing 'broker_url' in config".into() })),
+                None => {
+                    return Ok(Json(TestResult {
+                        success: false,
+                        message: "Missing 'broker_url' in config".into(),
+                    }));
+                }
             };
             let topic = match forwarder.config.get("topic").and_then(|v| v.as_str()) {
                 Some(t) => t.to_string(),
-                None => return Ok(Json(TestResult { success: false, message: "Missing 'topic' in config".into() })),
+                None => {
+                    return Ok(Json(TestResult {
+                        success: false,
+                        message: "Missing 'topic' in config".into(),
+                    }));
+                }
             };
             let payload = serde_json::json!({"records": [{"value": &test_entry}]});
             let url = format!("{}/topics/{}", broker_url.trim_end_matches('/'), topic);
-            match http_client.post(&url)
+            match http_client
+                .post(&url)
                 .header("Content-Type", "application/vnd.kafka.json.v2+json")
                 .json(&payload)
                 .send()

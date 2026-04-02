@@ -1,5 +1,5 @@
-use axum::extract::{Path, State};
 use axum::Json;
+use axum::extract::{Path, State};
 use uuid::Uuid;
 
 use agent_bastion_common::crypto;
@@ -11,13 +11,20 @@ use crate::app::AppState;
 use crate::middleware::auth_guard::AuthUser;
 
 pub(crate) fn validate_url(url_str: &str) -> Result<(), AppError> {
-    let parsed = url::Url::parse(url_str).map_err(|_| AppError::BadRequest("Invalid URL".into()))?;
+    let parsed =
+        url::Url::parse(url_str).map_err(|_| AppError::BadRequest("Invalid URL".into()))?;
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err(AppError::BadRequest("URL must use http or https".into()));
     }
     if let Some(host) = parsed.host_str() {
-        let blocked = ["localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "[::1]"];
-        if blocked.iter().any(|b| host == *b) {
+        let blocked = [
+            "localhost",
+            "127.0.0.1",
+            "0.0.0.0",
+            "169.254.169.254",
+            "[::1]",
+        ];
+        if blocked.contains(&host) {
             return Err(AppError::BadRequest("URL points to blocked address".into()));
         }
         // Block private IP ranges
@@ -37,11 +44,10 @@ pub async fn list_providers(
     _auth_user: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<Provider>>, AppError> {
-    let providers = sqlx::query_as::<_, Provider>(
-        "SELECT * FROM providers ORDER BY created_at DESC",
-    )
-    .fetch_all(&state.db)
-    .await?;
+    let providers =
+        sqlx::query_as::<_, Provider>("SELECT * FROM providers ORDER BY created_at DESC")
+            .fetch_all(&state.db)
+            .await?;
 
     Ok(Json(providers))
 }
@@ -52,7 +58,9 @@ pub async fn create_provider(
     Json(req): Json<CreateProviderRequest>,
 ) -> Result<Json<Provider>, AppError> {
     if req.name.is_empty() || req.base_url.is_empty() || req.api_key.is_empty() {
-        return Err(AppError::BadRequest("name, base_url, and api_key are required".into()));
+        return Err(AppError::BadRequest(
+            "name, base_url, and api_key are required".into(),
+        ));
     }
 
     // SSRF prevention: validate base_url
@@ -83,13 +91,11 @@ pub async fn get_provider(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Provider>, AppError> {
-    let provider = sqlx::query_as::<_, Provider>(
-        "SELECT * FROM providers WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or(AppError::NotFound("Provider not found".into()))?;
+    let provider = sqlx::query_as::<_, Provider>("SELECT * FROM providers WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or(AppError::NotFound("Provider not found".into()))?;
 
     Ok(Json(provider))
 }

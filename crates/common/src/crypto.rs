@@ -1,14 +1,12 @@
 use aes_gcm::{
-    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
+    aead::{Aead, KeyInit},
 };
-use rand::Rng;
 
 /// Encrypt data using AES-256-GCM.
 /// Returns: 12-byte nonce || ciphertext || 16-byte tag (all concatenated).
 pub fn encrypt(plaintext: &[u8], key: &[u8; 32]) -> anyhow::Result<Vec<u8>> {
-    let cipher =
-        Aes256Gcm::new_from_slice(key).map_err(|e| anyhow::anyhow!("Invalid key: {e}"))?;
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| anyhow::anyhow!("Invalid key: {e}"))?;
 
     let mut nonce_bytes = [0u8; 12];
     rand::fill(&mut nonce_bytes);
@@ -32,8 +30,7 @@ pub fn decrypt(encrypted: &[u8], key: &[u8; 32]) -> anyhow::Result<Vec<u8>> {
         return Err(anyhow::anyhow!("Ciphertext too short"));
     }
 
-    let cipher =
-        Aes256Gcm::new_from_slice(key).map_err(|e| anyhow::anyhow!("Invalid key: {e}"))?;
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| anyhow::anyhow!("Invalid key: {e}"))?;
 
     let nonce = Nonce::from_slice(&encrypted[..12]);
     let ciphertext = &encrypted[12..];
@@ -103,7 +100,9 @@ mod tests {
 
     #[test]
     fn parse_encryption_key_invalid_hex() {
-        let result = parse_encryption_key("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz");
+        let result = parse_encryption_key(
+            "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        );
         assert!(result.is_err(), "non-hex chars should be rejected");
     }
 }

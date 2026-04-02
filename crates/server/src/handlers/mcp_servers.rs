@@ -1,5 +1,5 @@
-use axum::extract::{Path, State};
 use axum::Json;
+use axum::extract::{Path, State};
 use uuid::Uuid;
 
 use agent_bastion_common::crypto;
@@ -14,11 +14,10 @@ pub async fn list_servers(
     _auth_user: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<McpServer>>, AppError> {
-    let servers = sqlx::query_as::<_, McpServer>(
-        "SELECT * FROM mcp_servers ORDER BY created_at DESC",
-    )
-    .fetch_all(&state.db)
-    .await?;
+    let servers =
+        sqlx::query_as::<_, McpServer>("SELECT * FROM mcp_servers ORDER BY created_at DESC")
+            .fetch_all(&state.db)
+            .await?;
 
     Ok(Json(servers))
 }
@@ -29,7 +28,9 @@ pub async fn create_server(
     Json(req): Json<CreateMcpServerRequest>,
 ) -> Result<Json<McpServer>, AppError> {
     if req.name.is_empty() || req.endpoint_url.is_empty() {
-        return Err(AppError::BadRequest("name and endpoint_url are required".into()));
+        return Err(AppError::BadRequest(
+            "name and endpoint_url are required".into(),
+        ));
     }
 
     // SSRF prevention: validate endpoint_url
@@ -38,8 +39,10 @@ pub async fn create_server(
     let auth_encrypted = if let Some(ref secret) = req.auth_secret {
         let key = crypto::parse_encryption_key(&state.config.encryption_key)
             .map_err(|e| AppError::Internal(anyhow::anyhow!("Invalid encryption key: {e}")))?;
-        Some(crypto::encrypt(secret.as_bytes(), &key)
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("Encryption failed: {e}")))?)
+        Some(
+            crypto::encrypt(secret.as_bytes(), &key)
+                .map_err(|e| AppError::Internal(anyhow::anyhow!("Encryption failed: {e}")))?,
+        )
     } else {
         None
     };
@@ -65,13 +68,11 @@ pub async fn get_server(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<McpServer>, AppError> {
-    let server = sqlx::query_as::<_, McpServer>(
-        "SELECT * FROM mcp_servers WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or(AppError::NotFound("MCP Server not found".into()))?;
+    let server = sqlx::query_as::<_, McpServer>("SELECT * FROM mcp_servers WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or(AppError::NotFound("MCP Server not found".into()))?;
 
     Ok(Json(server))
 }
