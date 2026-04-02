@@ -2,13 +2,13 @@ replicaCount: 1
 
 image:
   server:
-    repository: agent-bastion-server
+    repository: ghcr.io/agentbastion/agent-bastion-server
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   web:
-    repository: agent-bastion-web
+    repository: ghcr.io/agentbastion/agent-bastion-web
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
 
 service:
   gateway:

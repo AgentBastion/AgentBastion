@@ -5,9 +5,7 @@
 
 services:
   server:
-    build:
-      context: ../
-      dockerfile: deploy/docker/Dockerfile.server
+    image: ghcr.io/agentbastion/agent-bastion-server:${IMAGE_TAG:-latest}
     ports:
       - "${GATEWAY_PORT:-3000}:3000"   # Gateway — expose to clients
       # Console port NOT exposed externally by default
@@ -37,9 +35,7 @@ services:
     restart: unless-stopped
 
   web:
-    build:
-      context: ../
-      dockerfile: deploy/docker/Dockerfile.web
+    image: ghcr.io/agentbastion/agent-bastion-web:${IMAGE_TAG:-latest}
     ports:
       - "${WEB_PORT:-80}:80"
     depends_on:
