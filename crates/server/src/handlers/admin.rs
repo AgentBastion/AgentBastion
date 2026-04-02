@@ -101,6 +101,29 @@ pub async fn create_user(
     }))
 }
 
+/// POST /api/admin/users/{id}/force-logout — admin force-logout a user.
+pub async fn force_logout_user(
+    _auth_user: AuthUser,
+    State(state): State<AppState>,
+    axum::extract::Path(user_id): axum::extract::Path<uuid::Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    // Delete signing key
+    let _: () = fred::interfaces::KeysInterface::del(
+        &state.redis,
+        &format!("signing_key:{user_id}"),
+    )
+    .await
+    .unwrap_or(());
+
+    state.audit.log(
+        agent_bastion_common::audit::AuditEntry::new("admin.force_logout")
+            .user_id(_auth_user.claims.sub)
+            .resource(&format!("user:{user_id}")),
+    );
+
+    Ok(Json(serde_json::json!({"status": "user_logged_out", "user_id": user_id})))
+}
+
 // --- System settings ---
 
 #[derive(Debug, Serialize)]

@@ -203,6 +203,23 @@ export function UsersPage() {
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(u.created_at).toLocaleDateString()}
                     </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          if (!confirm(t('users.forceLogoutConfirm'))) return;
+                          try {
+                            await apiPost(`/api/admin/users/${u.id}/force-logout`, {});
+                            alert(t('users.forceLogoutSuccess'));
+                          } catch (err) {
+                            alert(err instanceof Error ? err.message : 'Failed');
+                          }
+                        }}
+                      >
+                        {t('users.forceLogout')}
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

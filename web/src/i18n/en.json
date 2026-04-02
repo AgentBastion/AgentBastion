@@ -57,7 +57,19 @@
     "logout": "Logout",
     "profile": "Profile",
     "title": "AgentBastion",
-    "subtitle": "Enterprise AI API & MCP Gateway"
+    "subtitle": "Enterprise AI API & MCP Gateway",
+    "changePassword": "Change Password",
+    "oldPassword": "Current Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm New Password",
+    "passwordChanged": "Password changed successfully. Please log in again.",
+    "passwordMismatch": "Passwords do not match",
+    "revokeSessions": "Revoke All Sessions",
+    "revokeSessionsConfirm": "This will log you out from all devices. Continue?",
+    "sessionsRevoked": "All sessions have been revoked. Please log in again.",
+    "deleteAccount": "Delete Account",
+    "deleteAccountConfirm": "This will permanently delete your account and all associated data. This action cannot be undone. Type your email to confirm:",
+    "accountDeleted": "Account deleted."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -245,7 +257,10 @@
     "creating": "Creating...",
     "createUser": "Create User",
     "roles": "Roles",
-    "created": "Created"
+    "created": "Created",
+    "forceLogout": "Force Logout",
+    "forceLogoutConfirm": "Force logout this user from all sessions?",
+    "forceLogoutSuccess": "User has been logged out from all sessions."
   },
   "roles": {
     "title": "Roles & Permissions",

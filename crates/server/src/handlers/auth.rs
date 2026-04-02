@@ -286,3 +286,27 @@ pub async fn delete_account(
 
     Ok(Json(serde_json::json!({"status": "deleted"})))
 }
+
+/// POST /api/auth/revoke-sessions — revoke all sessions for the current user.
+pub async fn revoke_sessions(
+    auth_user: AuthUser,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let user_id = auth_user.claims.sub;
+
+    // Delete signing key (invalidates all signed requests)
+    let _: () = fred::interfaces::KeysInterface::del(
+        &state.redis,
+        &format!("signing_key:{user_id}"),
+    )
+    .await
+    .unwrap_or(());
+
+    state.audit.log(
+        AuditEntry::new("auth.sessions_revoked")
+            .user_id(user_id)
+            .resource("auth"),
+    );
+
+    Ok(Json(serde_json::json!({"status": "all_sessions_revoked"})))
+}

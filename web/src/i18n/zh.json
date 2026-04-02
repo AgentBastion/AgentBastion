@@ -57,7 +57,19 @@
     "logout": "退出登录",
     "profile": "个人资料",
     "title": "AgentBastion",
-    "subtitle": "企业级 AI API 和 MCP 网关"
+    "subtitle": "企业级 AI API 和 MCP 网关",
+    "changePassword": "修改密码",
+    "oldPassword": "当前密码",
+    "newPassword": "新密码",
+    "confirmPassword": "确认新密码",
+    "passwordChanged": "密码修改成功，请重新登录。",
+    "passwordMismatch": "两次输入的密码不一致",
+    "revokeSessions": "注销所有会话",
+    "revokeSessionsConfirm": "此操作将退出所有设备上的登录状态。是否继续？",
+    "sessionsRevoked": "所有会话已注销，请重新登录。",
+    "deleteAccount": "删除账号",
+    "deleteAccountConfirm": "此操作将永久删除您的账号及所有关联数据，且不可恢复。请输入您的邮箱以确认：",
+    "accountDeleted": "账号已删除。"
   },
   "dashboard": {
     "title": "仪表盘",
@@ -245,7 +257,10 @@
     "creating": "创建中...",
     "createUser": "创建用户",
     "roles": "角色",
-    "created": "创建时间"
+    "created": "创建时间",
+    "forceLogout": "强制下线",
+    "forceLogoutConfirm": "确定要强制该用户退出所有会话吗？",
+    "forceLogoutSuccess": "该用户已被强制下线。"
   },
   "roles": {
     "title": "角色与权限",

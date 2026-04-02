@@ -22,6 +22,7 @@ import { AuditPage } from '@/routes/analytics/audit';
 import { UsersPage } from '@/routes/admin/users';
 import { RolesPage } from '@/routes/admin/roles';
 import { SettingsPage } from '@/routes/admin/settings';
+import { ProfilePage } from '@/routes/profile';
 
 function RootComponent() {
   const { t } = useTranslation();
@@ -145,6 +146,12 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 });
 
+const profileRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/profile',
+  component: ProfilePage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   providersRoute,
@@ -160,6 +167,7 @@ const routeTree = rootRoute.addChildren([
   usersRoute,
   rolesRoute,
   settingsRoute,
+  profileRoute,
 ]);
 
 export const router = createRouter({ routeTree });

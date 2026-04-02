@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { LogOut, User } from 'lucide-react';
+import { useNavigate } from '@tanstack/react-router';
 import { LanguageSwitcher } from './language-switcher';
 
 interface AppHeaderProps {
@@ -18,6 +19,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ userEmail, onLogout }: AppHeaderProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const initials = userEmail
     ? userEmail.substring(0, 2).toUpperCase()
     : 'AB';
@@ -38,7 +40,7 @@ export function AppHeader({ userEmail, onLogout }: AppHeaderProps) {
           <span className="hidden text-sm md:inline">{userEmail}</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate({ to: '/profile' })}>
             <User className="mr-2 h-4 w-4" />
             {t('auth.profile')}
           </DropdownMenuItem>

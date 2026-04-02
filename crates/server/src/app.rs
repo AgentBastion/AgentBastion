@@ -166,6 +166,7 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
         .route("/api/auth/me", get(handlers::auth::me))
         .route("/api/auth/password", post(handlers::auth::change_password))
         .route("/api/auth/account", delete(handlers::auth::delete_account))
+        .route("/api/auth/revoke-sessions", post(handlers::auth::revoke_sessions))
         .route(
             "/api/keys",
             get(handlers::api_keys::list_keys).post(handlers::api_keys::create_key),
@@ -215,6 +216,10 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
         .route(
             "/api/admin/users",
             get(handlers::admin::list_users).post(handlers::admin::create_user),
+        )
+        .route(
+            "/api/admin/users/{id}/force-logout",
+            post(handlers::admin::force_logout_user),
         )
         .route("/api/admin/settings/system", get(handlers::admin::get_system_settings))
         .route("/api/admin/settings/oidc", get(handlers::admin::get_oidc_settings))
