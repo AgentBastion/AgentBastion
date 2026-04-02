@@ -151,9 +151,10 @@ Contributions are welcome. Please open an issue to discuss before submitting a P
 ## License
 
 AgentBastion is source-available under the [Business Source License 1.1](LICENSE).
-Non-production use is free. Production use is free up to `10,000,000`
-Billable Tokens per UTC calendar month; above that threshold, a commercial
-license is required and priced by usage volume.
+Non-production use is free. Production use is free up to both `10,000,000`
+Billable Tokens and `10,000` MCP Tool Calls per UTC calendar month; above
+either threshold, a commercial license is required and priced by usage tiers.
 
-See [LICENSING.md](LICENSING.md) for the production-use threshold, the Billable
-Token definition, and the changeover to `GPL-2.0-or-later`.
+See [LICENSING.md](LICENSING.md) for the production-use thresholds, the
+Billable Token and MCP Tool Call definitions, the tiering model, and the
+changeover to `GPL-2.0-or-later`.

@@ -9,11 +9,14 @@ documentation in this repository, each version as released by the Licensor.
 
 Additional Use Grant: You may make production use of the Licensed Work,
 without purchasing a separate commercial license, if your aggregate Production
-Usage Volume does not exceed 10,000,000 Billable Tokens in a calendar month.
-"Billable Tokens" means the sum of all input and output LLM tokens processed by
-the Licensed Work for production traffic. Production use above that threshold
-requires a separate commercial license from the Licensor, priced according to
-monthly Billable Tokens as described in LICENSING.md.
+Usage Volume does not exceed 10,000,000 Billable Tokens and 10,000 MCP Tool
+Calls in a calendar month. "Billable Tokens" means the sum of all input and
+output LLM tokens processed by the Licensed Work for production traffic. "MCP
+Tool Calls" means production invocations of MCP tools routed through the
+Licensed Work, excluding internal health checks and tool discovery. Production
+use above either threshold requires a separate commercial license from the
+Licensor, priced according to monthly usage tiers based on Billable Tokens and
+MCP Tool Calls as described in LICENSING.md.
 
 Change Date: 2030-04-02
 

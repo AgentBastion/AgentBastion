@@ -151,9 +151,10 @@ AgentBastion/
 ## 授权协议
 
 AgentBastion 采用 [Business Source License 1.1](LICENSE) 进行源码可见分发。
-非生产用途可免费使用。生产用途在每个 UTC 自然月内不超过
-`10,000,000` Billable Tokens 时可免费使用；超过该阈值后，需购买按
-使用量计费的商业授权。
+非生产用途可免费使用。生产用途在每个 UTC 自然月内，同时不超过
+`10,000,000` Billable Tokens 且不超过 `10,000` MCP Tool Calls 时可
+免费使用；任一指标超出阈值后，需购买按使用量梯度计费的商业授权。
 
-具体的生产阈值、Billable Tokens 定义以及后续切换到
-`GPL-2.0-or-later` 的规则，见 [LICENSING.md](LICENSING.md)。
+具体的生产阈值、Billable Tokens 与 MCP Tool Calls 定义、梯度方案
+以及后续切换到 `GPL-2.0-or-later` 的规则，见
+[LICENSING.zh-CN.md](LICENSING.zh-CN.md)。
