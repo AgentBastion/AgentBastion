@@ -43,6 +43,7 @@ pub struct AppState {
     pub config: AppConfig,
     pub audit: AuditLogger,
     pub oidc: Option<OidcManager>,
+    pub started_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// Common security layers applied to both servers.
@@ -182,6 +183,10 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
         .route(
             "/api/keys/{id}",
             get(handlers::api_keys::get_key).delete(handlers::api_keys::revoke_key),
+        )
+        .route(
+            "/api/dashboard/stats",
+            get(handlers::dashboard::get_dashboard_stats),
         )
         .route("/api/mcp/tools", get(handlers::mcp_tools::list_tools))
         .route("/api/mcp/logs", get(handlers::mcp_logs::list_mcp_logs))

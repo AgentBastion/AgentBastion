@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -11,14 +11,15 @@ import {
 } from '@/components/ui/table';
 import { BarChart3, Hash } from 'lucide-react';
 import { api } from '@/lib/api';
+import { SimpleBarChart } from '@/components/ui/simple-chart';
 
 interface UsageRow {
   date: string;
-  model: string;
-  requests: number;
+  model_id: string;
+  request_count: number;
   input_tokens: number;
   output_tokens: number;
-  total_cost: number;
+  total_cost: string;
 }
 
 interface UsageStats {
@@ -45,6 +46,17 @@ export function UsagePage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load usage data'))
       .finally(() => setLoading(false));
   }, []);
+
+  // Aggregate tokens by date for chart
+  const chartData = useMemo(() => {
+    const byDate = new Map<string, number>();
+    for (const row of rows) {
+      byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.input_tokens + row.output_tokens);
+    }
+    return Array.from(byDate.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, value]) => ({ label: date.slice(5), value })); // MM-DD
+  }, [rows]);
 
   return (
     <div className="space-y-6">
@@ -82,9 +94,14 @@ export function UsagePage() {
         <CardHeader>
           <CardTitle className="text-base">{t('analyticsUsage.tokenUsageOverTime')}</CardTitle>
         </CardHeader>
-        <CardContent className="flex h-48 items-center justify-center text-muted-foreground">
-          <BarChart3 className="mr-2 h-5 w-5" />
-          {t('analyticsUsage.chartPlaceholder')}
+        <CardContent>
+          {loading ? (
+            <div className="flex h-48 items-center justify-center text-muted-foreground">{t('common.loading')}</div>
+          ) : chartData.length === 0 ? (
+            <div className="flex h-48 items-center justify-center text-muted-foreground">{t('analyticsUsage.noUsage')}</div>
+          ) : (
+            <SimpleBarChart data={chartData} formatValue={(v) => v.toLocaleString()} />
+          )}
         </CardContent>
       </Card>
 
@@ -117,13 +134,13 @@ export function UsagePage() {
               </TableHeader>
               <TableBody>
                 {rows.map((row, i) => (
-                  <TableRow key={`${row.date}-${row.model}-${i}`}>
+                  <TableRow key={`${row.date}-${row.model_id}-${i}`}>
                     <TableCell className="text-xs">{row.date}</TableCell>
-                    <TableCell className="font-mono text-xs">{row.model}</TableCell>
-                    <TableCell className="text-right">{row.requests.toLocaleString()}</TableCell>
+                    <TableCell className="font-mono text-xs">{row.model_id}</TableCell>
+                    <TableCell className="text-right">{row.request_count.toLocaleString()}</TableCell>
                     <TableCell className="text-right">{row.input_tokens.toLocaleString()}</TableCell>
                     <TableCell className="text-right">{row.output_tokens.toLocaleString()}</TableCell>
-                    <TableCell className="text-right">${row.total_cost.toFixed(4)}</TableCell>
+                    <TableCell className="text-right">${parseFloat(row.total_cost).toFixed(4)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -85,6 +85,7 @@ async fn main() -> anyhow::Result<()> {
         config: config.clone(),
         audit: audit_logger,
         oidc: oidc_manager,
+        started_at: chrono::Utc::now(),
     };
 
     // --- Start Gateway server (AI API + MCP) ---

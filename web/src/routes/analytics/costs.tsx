@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -11,25 +11,25 @@ import {
 } from '@/components/ui/table';
 import { DollarSign, TrendingUp } from 'lucide-react';
 import { api } from '@/lib/api';
+import { SimpleBarChart } from '@/components/ui/simple-chart';
 
 interface CostRow {
-  model: string;
-  requests: number;
+  model_id: string;
+  request_count: number;
   input_tokens: number;
   output_tokens: number;
-  total_cost: number;
-  percentage: number;
+  total_cost: string;
 }
 
 interface CostStats {
   total_cost_mtd: number;
-  budget_usage_pct: number;
+  budget_usage_pct: number | null;
 }
 
 export function CostsPage() {
   const { t } = useTranslation();
   const [rows, setRows] = useState<CostRow[]>([]);
-  const [stats, setStats] = useState<CostStats>({ total_cost_mtd: 0, budget_usage_pct: 0 });
+  const [stats, setStats] = useState<CostStats>({ total_cost_mtd: 0, budget_usage_pct: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -45,6 +45,19 @@ export function CostsPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load cost data'))
       .finally(() => setLoading(false));
   }, []);
+
+  // Chart: cost by model
+  const chartData = useMemo(() => {
+    return rows
+      .sort((a, b) => parseFloat(b.total_cost) - parseFloat(a.total_cost))
+      .map((row) => ({
+        label: row.model_id.length > 16 ? row.model_id.slice(0, 14) + '..' : row.model_id,
+        value: parseFloat(row.total_cost),
+      }));
+  }, [rows]);
+
+  const totalCost = useMemo(() => rows.reduce((sum, r) => sum + parseFloat(r.total_cost), 0), [rows]);
+  const budgetPct = stats.budget_usage_pct ?? 0;
 
   return (
     <div className="space-y-6">
@@ -72,25 +85,32 @@ export function CostsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loading ? '...' : `${stats.budget_usage_pct.toFixed(1)}%`}
+              {loading ? '...' : stats.budget_usage_pct != null ? `${budgetPct.toFixed(1)}%` : '—'}
             </div>
-            <div className="mt-2 h-2 w-full rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-primary transition-all"
-                style={{ width: `${Math.min(stats.budget_usage_pct, 100)}%` }}
-              />
-            </div>
+            {stats.budget_usage_pct != null && (
+              <div className="mt-2 h-2 w-full rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${Math.min(budgetPct, 100)}%` }}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{t('analyticsCosts.costTrend')}</CardTitle>
+          <CardTitle className="text-base">{t('analyticsCosts.costByModel')}</CardTitle>
         </CardHeader>
-        <CardContent className="flex h-48 items-center justify-center text-muted-foreground">
-          <TrendingUp className="mr-2 h-5 w-5" />
-          {t('analyticsCosts.chartPlaceholder')}
+        <CardContent>
+          {loading ? (
+            <div className="flex h-48 items-center justify-center text-muted-foreground">{t('common.loading')}</div>
+          ) : chartData.length === 0 ? (
+            <div className="flex h-48 items-center justify-center text-muted-foreground">{t('analyticsCosts.noCosts')}</div>
+          ) : (
+            <SimpleBarChart data={chartData} formatValue={(v) => `$${v.toFixed(4)}`} />
+          )}
         </CardContent>
       </Card>
 
@@ -100,7 +120,7 @@ export function CostsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{t('analyticsCosts.costByModel')}</CardTitle>
+          <CardTitle className="text-base">{t('analyticsCosts.costTrend')}</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -122,16 +142,20 @@ export function CostsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.model}>
-                    <TableCell className="font-mono text-xs">{row.model}</TableCell>
-                    <TableCell className="text-right">{row.requests.toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{row.input_tokens.toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{row.output_tokens.toLocaleString()}</TableCell>
-                    <TableCell className="text-right">${row.total_cost.toFixed(4)}</TableCell>
-                    <TableCell className="text-right">{row.percentage.toFixed(1)}%</TableCell>
-                  </TableRow>
-                ))}
+                {rows.map((row) => {
+                  const cost = parseFloat(row.total_cost);
+                  const pct = totalCost > 0 ? (cost / totalCost) * 100 : 0;
+                  return (
+                    <TableRow key={row.model_id}>
+                      <TableCell className="font-mono text-xs">{row.model_id}</TableCell>
+                      <TableCell className="text-right">{row.request_count.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">{row.input_tokens.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">{row.output_tokens.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">${cost.toFixed(4)}</TableCell>
+                      <TableCell className="text-right">{pct.toFixed(1)}%</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

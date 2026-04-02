@@ -25,7 +25,8 @@
     "copy": "复制",
     "copied": "已复制！",
     "done": "完成",
-    "edit": "编辑"
+    "edit": "编辑",
+    "total": "总计"
   },
   "nav": {
     "dashboard": "仪表盘",
@@ -294,7 +295,10 @@
     "serverInfo": "服务器信息",
     "version": "版本",
     "uptime": "运行时间",
-    "goVersion": "Go 版本",
+    "rustVersion": "Rust 版本",
+    "serverHost": "服务器地址",
+    "gatewayPort": "网关端口",
+    "consolePort": "控制台端口",
     "oidcTitle": "OpenID Connect / SSO",
     "oidcEnabled": "OIDC 已启用",
     "issuerUrl": "签发者 URL",

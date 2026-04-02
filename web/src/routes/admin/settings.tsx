@@ -11,7 +11,10 @@ import { api } from '@/lib/api';
 interface SystemInfo {
   version: string;
   uptime: string;
-  go_version: string;
+  rust_version: string;
+  server_host: string;
+  gateway_port: number;
+  console_port: number;
 }
 
 interface OidcConfig {
@@ -89,8 +92,22 @@ export function SettingsPage() {
                       <p className="text-sm font-medium">{systemInfo?.uptime ?? '—'}</p>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">{t('settingsPage.goVersion')}</Label>
-                      <p className="text-sm font-medium">{systemInfo?.go_version ?? '—'}</p>
+                      <Label className="text-xs text-muted-foreground">{t('settingsPage.rustVersion')}</Label>
+                      <p className="text-sm font-medium">{systemInfo?.rust_version ?? '—'}</p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-3 mt-4">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">{t('settingsPage.serverHost')}</Label>
+                      <p className="text-sm font-medium font-mono">{systemInfo?.server_host ?? '—'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">{t('settingsPage.gatewayPort')}</Label>
+                      <p className="text-sm font-medium font-mono">{systemInfo?.gateway_port ?? '—'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">{t('settingsPage.consolePort')}</Label>
+                      <p className="text-sm font-medium font-mono">{systemInfo?.console_port ?? '—'}</p>
                     </div>
                   </div>
                 </div>

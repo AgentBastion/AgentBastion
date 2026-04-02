@@ -3,6 +3,7 @@ pub mod analytics;
 pub mod api_keys;
 pub mod audit;
 pub mod auth;
+pub mod dashboard;
 pub mod gateway_logs;
 pub mod health;
 pub mod log_forwarders;

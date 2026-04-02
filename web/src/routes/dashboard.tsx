@@ -27,6 +27,13 @@ interface AuditEntry {
   resource: string;
 }
 
+interface DashboardStats {
+  total_requests_today: number;
+  active_providers: number;
+  active_api_keys: number;
+  connected_mcp_servers: number;
+}
+
 const serviceList: { name: string; key: keyof HealthStatus; icon: typeof Database }[] = [
   { name: 'PostgreSQL', key: 'postgres', icon: Database },
   { name: 'Redis', key: 'redis', icon: MemoryStick },
@@ -37,17 +44,15 @@ export function DashboardPage() {
   const { t } = useTranslation();
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [recentActivity, setRecentActivity] = useState<AuditEntry[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loadingHealth, setLoadingHealth] = useState(true);
   const [loadingActivity, setLoadingActivity] = useState(true);
 
-  const statCards = [
-    { title: t('dashboard.totalRequests'), icon: BarChart3, description: t('dashboard.today') },
-    { title: t('dashboard.activeProviders'), icon: Cpu, description: t('dashboard.configured') },
-    { title: t('dashboard.apiKeysCount'), icon: Key, description: t('dashboard.activeKeys') },
-    { title: t('dashboard.mcpServersCount'), icon: Server, description: t('dashboard.connected') },
-  ];
-
   useEffect(() => {
+    api<DashboardStats>('/api/dashboard/stats')
+      .then(setStats)
+      .catch(() => {});
+
     api<HealthStatus>('/api/health')
       .then(setHealth)
       .catch(() => setHealth(null))
@@ -58,6 +63,13 @@ export function DashboardPage() {
       .catch(() => setRecentActivity([]))
       .finally(() => setLoadingActivity(false));
   }, []);
+
+  const statCards = [
+    { title: t('dashboard.totalRequests'), icon: BarChart3, value: stats?.total_requests_today, description: t('dashboard.today') },
+    { title: t('dashboard.activeProviders'), icon: Cpu, value: stats?.active_providers, description: t('dashboard.configured') },
+    { title: t('dashboard.apiKeysCount'), icon: Key, value: stats?.active_api_keys, description: t('dashboard.activeKeys') },
+    { title: t('dashboard.mcpServersCount'), icon: Server, value: stats?.connected_mcp_servers, description: t('dashboard.connected') },
+  ];
 
   return (
     <div className="space-y-6">
@@ -76,7 +88,9 @@ export function DashboardPage() {
               <stat.icon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">&mdash;</div>
+              <div className="text-2xl font-bold">
+                {stat.value != null ? stat.value.toLocaleString() : '...'}
+              </div>
               <p className="text-xs text-muted-foreground">{stat.description}</p>
             </CardContent>
           </Card>

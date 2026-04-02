@@ -10,6 +10,7 @@ use crate::middleware::auth_guard::AuthUser;
 #[derive(Debug, Deserialize)]
 pub struct McpLogsQuery {
     pub limit: Option<i64>,
+    pub offset: Option<i64>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -24,14 +25,21 @@ pub struct McpLogEntry {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct McpLogsResponse {
+    pub items: Vec<McpLogEntry>,
+    pub total: i64,
+}
+
 pub async fn list_mcp_logs(
     _auth_user: AuthUser,
     State(state): State<AppState>,
     Query(params): Query<McpLogsQuery>,
-) -> Result<Json<Vec<McpLogEntry>>, AppError> {
-    let limit = params.limit.unwrap_or(100).min(500);
+) -> Result<Json<McpLogsResponse>, AppError> {
+    let limit = params.limit.unwrap_or(50).min(200);
+    let offset = params.offset.unwrap_or(0);
 
-    let rows = sqlx::query_as::<_, McpLogEntry>(
+    let items = sqlx::query_as::<_, McpLogEntry>(
         r#"SELECT
             l.id, l.tool_name,
             COALESCE(s.name, 'unknown') as server_name,
@@ -41,11 +49,19 @@ pub async fn list_mcp_logs(
            LEFT JOIN mcp_servers s ON s.id = l.server_id
            LEFT JOIN users u ON u.id = l.user_id
            ORDER BY l.created_at DESC
-           LIMIT $1"#,
+           LIMIT $1 OFFSET $2"#,
     )
     .bind(limit)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
 
-    Ok(Json(rows))
+    let total: Option<i64> = sqlx::query_scalar("SELECT COUNT(*) FROM mcp_call_logs")
+        .fetch_one(&state.db)
+        .await?;
+
+    Ok(Json(McpLogsResponse {
+        items,
+        total: total.unwrap_or(0),
+    }))
 }

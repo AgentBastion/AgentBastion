@@ -25,7 +25,8 @@
     "copy": "Copy",
     "copied": "Copied!",
     "done": "Done",
-    "edit": "Edit"
+    "edit": "Edit",
+    "total": "Total"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -294,7 +295,10 @@
     "serverInfo": "Server Information",
     "version": "Version",
     "uptime": "Uptime",
-    "goVersion": "Go Version",
+    "rustVersion": "Rust Version",
+    "serverHost": "Server Host",
+    "gatewayPort": "Gateway Port",
+    "consolePort": "Console Port",
     "oidcTitle": "OpenID Connect / SSO",
     "oidcEnabled": "OIDC Enabled",
     "issuerUrl": "Issuer URL",

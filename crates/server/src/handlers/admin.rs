@@ -134,17 +134,36 @@ pub async fn force_logout_user(
 #[derive(Debug, Serialize)]
 pub struct SystemInfo {
     pub version: String,
+    pub uptime: String,
+    pub rust_version: String,
     pub server_host: String,
     pub gateway_port: u16,
     pub console_port: u16,
+}
+
+fn format_uptime(dur: chrono::TimeDelta) -> String {
+    let secs = dur.num_seconds();
+    let days = secs / 86400;
+    let hours = (secs % 86400) / 3600;
+    let mins = (secs % 3600) / 60;
+    if days > 0 {
+        format!("{days}d {hours}h {mins}m")
+    } else if hours > 0 {
+        format!("{hours}h {mins}m")
+    } else {
+        format!("{mins}m")
+    }
 }
 
 pub async fn get_system_settings(
     _auth_user: AuthUser,
     State(state): State<AppState>,
 ) -> Json<SystemInfo> {
+    let uptime = chrono::Utc::now() - state.started_at;
     Json(SystemInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
+        uptime: format_uptime(uptime),
+        rust_version: env!("RUSTC_VERSION").to_string(),
         server_host: state.config.server_host.clone(),
         gateway_port: state.config.gateway_port,
         console_port: state.config.console_port,
