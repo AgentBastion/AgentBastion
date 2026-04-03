@@ -87,19 +87,19 @@ async fn query_quickwit(
     );
 
     // Optional timestamp range filters
-    if let Some(ref from) = query.from {
-        if let Ok(dt) = chrono::NaiveDate::parse_from_str(from, "%Y-%m-%d") {
-            let ts = dt.and_hms_opt(0, 0, 0).unwrap();
-            let epoch = ts.and_utc().timestamp();
-            url.push_str(&format!("&start_timestamp={epoch}"));
-        }
+    if let Some(ref from) = query.from
+        && let Ok(dt) = chrono::NaiveDate::parse_from_str(from, "%Y-%m-%d")
+    {
+        let ts = dt.and_hms_opt(0, 0, 0).unwrap();
+        let epoch = ts.and_utc().timestamp();
+        url.push_str(&format!("&start_timestamp={epoch}"));
     }
-    if let Some(ref to) = query.to {
-        if let Ok(dt) = chrono::NaiveDate::parse_from_str(to, "%Y-%m-%d") {
-            let ts = dt.and_hms_opt(23, 59, 59).unwrap();
-            let epoch = ts.and_utc().timestamp();
-            url.push_str(&format!("&end_timestamp={epoch}"));
-        }
+    if let Some(ref to) = query.to
+        && let Ok(dt) = chrono::NaiveDate::parse_from_str(to, "%Y-%m-%d")
+    {
+        let ts = dt.and_hms_opt(23, 59, 59).unwrap();
+        let epoch = ts.and_utc().timestamp();
+        url.push_str(&format!("&end_timestamp={epoch}"));
     }
 
     let client = reqwest::Client::new();

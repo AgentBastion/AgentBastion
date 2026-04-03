@@ -39,6 +39,7 @@ pub async fn require_admin(
 ///
 /// Iterates through the user's JWT roles, parses each into a `SystemRole`,
 /// and checks if any role grants the required permission.
+#[allow(dead_code, clippy::type_complexity)]
 pub fn require_permission(
     resource: &'static str,
     action: &'static str,

@@ -50,10 +50,10 @@ pub(crate) fn validate_url(url_str: &str) -> Result<(), AppError> {
     }
 
     // Also block obviously private hostnames even if DNS fails
-    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-        if ip.is_loopback() || ip.is_unspecified() || is_private_ip(&ip) || is_link_local(&ip) {
-            return Err(AppError::BadRequest("URL points to private network".into()));
-        }
+    if let Ok(ip) = host.parse::<std::net::IpAddr>()
+        && (ip.is_loopback() || ip.is_unspecified() || is_private_ip(&ip) || is_link_local(&ip))
+    {
+        return Err(AppError::BadRequest("URL points to private network".into()));
     }
 
     Ok(())
