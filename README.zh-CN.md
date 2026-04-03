@@ -48,7 +48,10 @@ AgentBastion 一次部署，全部解决。
 - **自动格式转换** — Anthropic Messages API、Google Gemini 等，统一在 OpenAI 兼容接口之后
 - **SSE 流式透传** — 零开销转发，实时 Token 计数
 - **虚拟 API Key** — 按团队、项目、开发者签发 `ab-` 前缀的作用域密钥，一键吊销
+- **API Key 生命周期管理** — 自动轮换并支持宽限期、按 Key 的闲置超时、到期预警、后台策略执行
 - **滑动窗口限流** — 基于 Redis 的 RPM/TPM 限制，按 Key 或按用户
+- **断路器** — 三态（Closed/Open/HalfOpen）断路器，可配置故障阈值和恢复周期
+- **指数退避重试** — 可配置的重试策略，带抖动，适用于网络错误和上游限流
 - **实时费用追踪** — 按模型计费，预算告警，团队费用归因
 
 ### MCP 网关
@@ -64,12 +67,24 @@ AgentBastion 一次部署，全部解决。
 - **SSO/OIDC** — 对接 Zitadel、Okta、Azure AD 或任何 OIDC 提供商
 - **AES-256-GCM 加密** — Provider API Key 和密钥加密存储
 - **SHA-256 密钥哈希** — 虚拟 API Key 仅存哈希，明文仅显示一次
+- **Content Security Policy** — Console 端口的 CSP 头，防止 XSS 和注入攻击
+- **JWT 熵值检测** — 启动时校验 JWT Secret 最少 32 字符并进行熵值验证
+- **启动依赖验证** — 启动时校验 PostgreSQL、Redis 和加密密钥是否可用，并输出清晰的错误信息
 - **安全 HTTP 头** — X-Content-Type-Options、X-Frame-Options、CORS 白名单、请求超时
+- **软删除** — 用户、Provider、API Key 使用软删除（`deleted_at` 列），30 天后自动清理
 - **Distroless 容器** — 生产环境最小攻击面 (2MB 运行镜像，无 shell)
 
+### 运维与配置
+- **动态配置** — 大部分配置存储在数据库（`system_settings` 表），可通过 Web UI（管理 > 设置，7 个分类标签页）配置
+- **首次运行向导** — 引导式 `/setup` 向导，创建超级管理员账户、配置站点信息，可选添加首个 Provider 和 API Key
+- **多实例同步** — 配置变更通过 Redis Pub/Sub 在多个实例间同步
+- **数据保留策略** — 可配置使用记录和审计日志的保留期限，每日自动清理
+
 ### 可观测性
+- **Prometheus 指标** — Gateway 端口 (3000) 的 `GET /metrics` 端点，暴露 `gateway_requests_total`、`gateway_request_duration_seconds`、`gateway_tokens_total`、`gateway_rate_limited_total`、`circuit_breaker_state` 等指标
+- **增强健康检查** — `/health/live`（存活探针）、`/health/ready`（就绪探针，检测 PostgreSQL 和 Redis）、`/api/health`（详细延迟和连接池统计）
 - **Quickwit 审计日志** — 全文搜索所有 API 调用和工具调用记录
-- **Syslog 转发** — RFC 5424 兼容，无缝对接现有 SIEM 系统
+- **审计日志转发** — 多通道投递：UDP/TCP Syslog (RFC 5424)、Kafka、HTTP Webhook — 将审计事件路由至任意 SIEM、数据湖或告警管道
 - **使用量分析** — 按用户、团队、模型、时间段的 Token 消耗统计
 - **费用分析** — 月度累计支出、预算使用率、按模型费用明细
 - **健康仪表盘** — PostgreSQL、Redis、Quickwit 及所有 MCP Server 的实时状态
@@ -100,7 +115,7 @@ cargo run -p agent-bastion-server
 # 3. 启动前端开发服务器
 cd web && pnpm install && pnpm dev
 
-# 4. 打开 http://localhost:5173
+# 4. 在 http://localhost:5173/setup 完成设置向导
 ```
 
 生产部署请参阅 **[部署指南](docs/zh-CN/deployment-guide.md)**。
@@ -119,7 +134,7 @@ cd web && pnpm install && pnpm dev
 
 | 端口 | 服务器 | 暴露范围 | 用途 |
 |------|--------|----------|------|
-| `3000` | Gateway | **公网** — 暴露给 AI 客户端 | `/v1/chat/completions`, `/v1/models`, `/mcp` |
+| `3000` | Gateway | **公网** — 暴露给 AI 客户端 | `/v1/chat/completions`, `/v1/models`, `/mcp`, `/metrics`, `/health/*` |
 | `3001` | Console | **内网** — 限制在 VPN/防火墙后 | `/api/*` 管理端点, Web UI |
 
 > 生产环境中，**仅端口 3000** 应可从公网访问。端口 3001 应限制在管理网络内。
@@ -134,8 +149,8 @@ AgentBastion/
 │   ├── mcp-gateway/     # MCP 代理：JSON-RPC、工具聚合、访问控制
 │   ├── auth/            # JWT、OIDC、API Key、密码哈希、RBAC
 │   └── common/          # 配置、数据库、模型、加密、审计日志
-├── migrations/          # 7 个 PostgreSQL 迁移文件
-├── web/                 # React 前端 — 15 个页面组件
+├── migrations/          # 12 个 PostgreSQL 迁移文件
+├── web/                 # React 前端 — 约 20 个页面组件
 ├── deploy/
 │   ├── docker/          # Dockerfile.server (distroless), Dockerfile.web (nginx)
 │   ├── docker-compose.yml       # 生产部署

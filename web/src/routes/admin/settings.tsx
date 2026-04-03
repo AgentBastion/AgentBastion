@@ -1,12 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Shield, ScrollText } from 'lucide-react';
-import { api } from '@/lib/api';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Settings, Shield, Key, DollarSign, Database, Lock, Plus, Trash2 } from 'lucide-react';
+import { api, apiPatch } from '@/lib/api';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface SystemInfo {
   version: string;
@@ -28,164 +49,722 @@ interface AuditConfig {
   quickwit_index: string;
 }
 
+interface SettingEntry {
+  key: string;
+  value: unknown;
+  category: string;
+  description: string;
+  updated_at: string;
+}
+
+interface ContentFilterPattern {
+  pattern: string;
+  severity: string;
+  category: string;
+}
+
+interface PiiPattern {
+  name: string;
+  regex: string;
+  placeholder_prefix: string;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getSettingValue(
+  settings: Record<string, SettingEntry[]>,
+  category: string,
+  key: string,
+): unknown {
+  const entries = settings[category];
+  if (!entries) return undefined;
+  const entry = entries.find((e) => e.key === key);
+  return entry?.value;
+}
+
+function num(v: unknown, fallback = 0): number {
+  if (v === undefined || v === null || v === '') return fallback;
+  const n = Number(v);
+  return Number.isNaN(n) ? fallback : n;
+}
+
+function str(v: unknown, fallback = ''): string {
+  if (v === undefined || v === null) return fallback;
+  return String(v);
+}
+
+// ---------------------------------------------------------------------------
+// NumberField — a small helper for number inputs with label + hint
+// ---------------------------------------------------------------------------
+
+function NumberField({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max,
+  hint,
+  readOnly,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  hint?: string;
+  readOnly?: boolean;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-sm">{label}</Label>
+      <Input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        min={min}
+        max={max}
+        readOnly={readOnly}
+        className={readOnly ? 'bg-muted' : ''}
+      />
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export function SettingsPage() {
   const { t } = useTranslation();
+
+  // Read-only state from dedicated endpoints
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [oidcConfig, setOidcConfig] = useState<OidcConfig | null>(null);
   const [auditConfig, setAuditConfig] = useState<AuditConfig | null>(null);
+
+  // Editable settings from GET /api/admin/settings
+  const [_allSettings, setAllSettings] = useState<Record<string, SettingEntry[]>>({});
+
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // --- Editable form state ---
+  // General
+  const [siteName, setSiteName] = useState('');
+  // Auth
+  const [accessTtl, setAccessTtl] = useState(3600);
+  const [refreshTtl, setRefreshTtl] = useState(7);
+  const [signatureDrift, setSignatureDrift] = useState(300);
+  const [nonceTtl, setNonceTtl] = useState(300);
+  // Gateway
+  const [cacheTtl, setCacheTtl] = useState(0);
+  const [requestTimeout, setRequestTimeout] = useState(30);
+  const [bodyLimit, setBodyLimit] = useState(1048576);
+  // Security
+  const [contentFilters, setContentFilters] = useState<ContentFilterPattern[]>([]);
+  const [piiPatterns, setPiiPatterns] = useState<PiiPattern[]>([]);
+  // Budget
+  const [alertThresholds, setAlertThresholds] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState('');
+  // API Keys config
+  const [defaultExpiry, setDefaultExpiry] = useState(90);
+  const [inactivityTimeout, setInactivityTimeout] = useState(0);
+  const [rotationPeriod, setRotationPeriod] = useState(0);
+  const [gracePeriod, setGracePeriod] = useState(24);
+  // Data retention
+  const [usageRetention, setUsageRetention] = useState(90);
+  const [auditRetention, setAuditRetention] = useState(365);
+
+  // ---------------------------------------------------------------------------
+  // Load
+  // ---------------------------------------------------------------------------
+
+  const populateForm = useCallback((data: Record<string, SettingEntry[]>) => {
+    setSiteName(str(getSettingValue(data, 'general', 'site_name'), ''));
+    setAccessTtl(num(getSettingValue(data, 'auth', 'jwt_access_ttl_seconds'), 3600));
+    setRefreshTtl(num(getSettingValue(data, 'auth', 'jwt_refresh_ttl_days'), 7));
+    setSignatureDrift(num(getSettingValue(data, 'auth', 'signature_drift_seconds'), 300));
+    setNonceTtl(num(getSettingValue(data, 'auth', 'signature_nonce_ttl_seconds'), 300));
+    setCacheTtl(num(getSettingValue(data, 'gateway', 'cache_ttl_seconds'), 0));
+    setRequestTimeout(num(getSettingValue(data, 'gateway', 'request_timeout_seconds'), 30));
+    setBodyLimit(num(getSettingValue(data, 'gateway', 'body_limit_bytes'), 1048576));
+
+    const cf = getSettingValue(data, 'security', 'content_filter_patterns');
+    setContentFilters(Array.isArray(cf) ? cf : []);
+    const pp = getSettingValue(data, 'security', 'pii_redactor_patterns');
+    setPiiPatterns(Array.isArray(pp) ? pp : []);
+
+    const th = getSettingValue(data, 'budget', 'alert_thresholds');
+    setAlertThresholds(Array.isArray(th) ? th.join(', ') : str(th, ''));
+    setWebhookUrl(str(getSettingValue(data, 'budget', 'webhook_url'), ''));
+
+    setDefaultExpiry(num(getSettingValue(data, 'api_keys', 'default_expiry_days'), 90));
+    setInactivityTimeout(num(getSettingValue(data, 'api_keys', 'inactivity_timeout_days'), 0));
+    setRotationPeriod(num(getSettingValue(data, 'api_keys', 'rotation_period_days'), 0));
+    setGracePeriod(num(getSettingValue(data, 'api_keys', 'rotation_grace_period_hours'), 24));
+
+    setUsageRetention(num(getSettingValue(data, 'data', 'usage_retention_days'), 90));
+    setAuditRetention(num(getSettingValue(data, 'data', 'audit_retention_days'), 365));
+  }, []);
 
   useEffect(() => {
     Promise.all([
       api<SystemInfo>('/api/admin/settings/system').catch(() => null),
       api<OidcConfig>('/api/admin/settings/oidc').catch(() => null),
       api<AuditConfig>('/api/admin/settings/audit').catch(() => null),
+      api<Record<string, SettingEntry[]>>('/api/admin/settings').catch(() => ({})),
     ])
-      .then(([sys, oidc, audit]) => {
+      .then(([sys, oidc, audit, settings]) => {
         setSystemInfo(sys);
         setOidcConfig(oidc);
         setAuditConfig(audit);
+        const s = settings ?? {};
+        setAllSettings(s);
+        populateForm(s);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [populateForm]);
+
+  // ---------------------------------------------------------------------------
+  // Save
+  // ---------------------------------------------------------------------------
+
+  const handleSave = async () => {
+    setSaving(true);
+    setStatusMsg(null);
+    try {
+      const thresholdsParsed = alertThresholds
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map(Number)
+        .filter((n) => !Number.isNaN(n));
+
+      await apiPatch('/api/admin/settings', {
+        settings: {
+          site_name: siteName,
+          jwt_access_ttl_seconds: accessTtl,
+          jwt_refresh_ttl_days: refreshTtl,
+          signature_drift_seconds: signatureDrift,
+          signature_nonce_ttl_seconds: nonceTtl,
+          cache_ttl_seconds: cacheTtl,
+          request_timeout_seconds: requestTimeout,
+          body_limit_bytes: bodyLimit,
+          content_filter_patterns: contentFilters,
+          pii_redactor_patterns: piiPatterns,
+          alert_thresholds: thresholdsParsed,
+          webhook_url: webhookUrl,
+          default_expiry_days: defaultExpiry,
+          inactivity_timeout_days: inactivityTimeout,
+          rotation_period_days: rotationPeriod,
+          rotation_grace_period_hours: gracePeriod,
+          usage_retention_days: usageRetention,
+          audit_retention_days: auditRetention,
+        },
+      });
+      setStatusMsg({ type: 'success', text: t('settings.saved') });
+    } catch (err) {
+      setStatusMsg({
+        type: 'error',
+        text: `${t('settings.saveError')}: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Content filter helpers
+  // ---------------------------------------------------------------------------
+
+  const addContentFilter = () =>
+    setContentFilters([...contentFilters, { pattern: '', severity: 'low', category: '' }]);
+
+  const removeContentFilter = (i: number) =>
+    setContentFilters(contentFilters.filter((_, idx) => idx !== i));
+
+  const updateContentFilter = (i: number, field: keyof ContentFilterPattern, value: string) =>
+    setContentFilters(contentFilters.map((p, idx) => (idx === i ? { ...p, [field]: value } : p)));
+
+  // PII helpers
+  const addPiiPattern = () =>
+    setPiiPatterns([...piiPatterns, { name: '', regex: '', placeholder_prefix: '' }]);
+
+  const removePiiPattern = (i: number) =>
+    setPiiPatterns(piiPatterns.filter((_, idx) => idx !== i));
+
+  const updatePiiPattern = (i: number, field: keyof PiiPattern, value: string) =>
+    setPiiPatterns(piiPatterns.map((p, idx) => (idx === i ? { ...p, [field]: value } : p)));
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t('settingsPage.title')}</h1>
-        <p className="text-muted-foreground">{t('settingsPage.subtitle')}</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">{t('settingsPage.title')}</h1>
+          <p className="text-muted-foreground">{t('settingsPage.subtitle')}</p>
+        </div>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? t('common.loading') : t('common.save')}
+        </Button>
       </div>
+
+      {statusMsg && (
+        <div
+          className={`rounded-md p-3 text-sm ${
+            statusMsg.type === 'success'
+              ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+              : 'bg-destructive/10 text-destructive'
+          }`}
+        >
+          {statusMsg.text}
+        </div>
+      )}
 
       <Tabs defaultValue="general">
         <TabsList>
           <TabsTrigger value="general">
             <Settings className="h-4 w-4" />
-            {t('settingsPage.general')}
+            {t('settings.general')}
           </TabsTrigger>
-          <TabsTrigger value="oidc">
+          <TabsTrigger value="auth">
             <Shield className="h-4 w-4" />
-            {t('settingsPage.oidc')}
+            {t('settings.auth')}
           </TabsTrigger>
-          <TabsTrigger value="audit">
-            <ScrollText className="h-4 w-4" />
-            {t('settingsPage.auditConfig')}
+          <TabsTrigger value="gateway">
+            <Lock className="h-4 w-4" />
+            {t('settings.gateway')}
+          </TabsTrigger>
+          <TabsTrigger value="security">
+            <Shield className="h-4 w-4" />
+            {t('settings.security')}
+          </TabsTrigger>
+          <TabsTrigger value="budget">
+            <DollarSign className="h-4 w-4" />
+            {t('settings.budget')}
+          </TabsTrigger>
+          <TabsTrigger value="apikeys">
+            <Key className="h-4 w-4" />
+            {t('settings.apiKeysConfig')}
+          </TabsTrigger>
+          <TabsTrigger value="data">
+            <Database className="h-4 w-4" />
+            {t('settings.dataRetention')}
           </TabsTrigger>
         </TabsList>
 
+        {/* ---------------------------------------------------------------- */}
+        {/* General Tab                                                       */}
+        {/* ---------------------------------------------------------------- */}
         <TabsContent value="general">
+          <div className="space-y-6">
+            {/* System info — read-only */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{t('settingsPage.serverInfo')}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">{t('settingsPage.version')}</Label>
+                        <p className="text-sm font-medium">{systemInfo?.version ?? '—'}</p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">{t('settingsPage.uptime')}</Label>
+                        <p className="text-sm font-medium">{systemInfo?.uptime ?? '—'}</p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">{t('settingsPage.rustVersion')}</Label>
+                        <p className="text-sm font-medium">{systemInfo?.rust_version ?? '—'}</p>
+                      </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-3 mt-4">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">{t('settingsPage.serverHost')}</Label>
+                        <p className="text-sm font-medium font-mono">{systemInfo?.server_host ?? '—'}</p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">{t('settingsPage.gatewayPort')}</Label>
+                        <p className="text-sm font-medium font-mono">{systemInfo?.gateway_port ?? '—'}</p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">{t('settingsPage.consolePort')}</Label>
+                        <p className="text-sm font-medium font-mono">{systemInfo?.console_port ?? '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Site name — editable */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{t('settings.siteName')}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="max-w-sm">
+                  <Input
+                    value={siteName}
+                    onChange={(e) => setSiteName(e.target.value)}
+                    placeholder="AgentBastion"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* OIDC — read-only */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{t('settingsPage.oidcTitle')}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">{t('common.status')}</Label>
+                      <Badge variant={oidcConfig?.enabled ? 'default' : 'secondary'}>
+                        {oidcConfig?.enabled ? t('common.enabled') : t('common.disabled')}
+                      </Badge>
+                    </div>
+                    <Separator />
+                    <div>
+                      <Label className="text-xs text-muted-foreground">{t('settingsPage.issuerUrl')}</Label>
+                      <p className="mt-1 font-mono text-sm">{oidcConfig?.issuer_url ?? '—'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">{t('settingsPage.clientId')}</Label>
+                      <p className="mt-1 font-mono text-sm">
+                        {oidcConfig?.client_id
+                          ? `${oidcConfig.client_id.slice(0, 8)}${'*'.repeat(Math.max(0, oidcConfig.client_id.length - 8))}`
+                          : '—'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Audit — read-only */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{t('settingsPage.auditTitle')}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-sm">{t('settingsPage.quickwit')}</Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {auditConfig?.quickwit_url || '—'}
+                        </p>
+                      </div>
+                      <Badge variant={auditConfig?.quickwit_url ? 'default' : 'secondary'}>
+                        {auditConfig?.quickwit_url ? t('settingsPage.connected') : t('settingsPage.disconnected')}
+                      </Badge>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-sm">{t('settingsPage.logForwarding')}</Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {t('settingsPage.logForwardingHint')}
+                        </p>
+                      </div>
+                      <a href="/admin/log-forwarders" className="text-sm text-primary hover:underline">
+                        {t('settingsPage.manage')}
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Auth Tab                                                          */}
+        {/* ---------------------------------------------------------------- */}
+        <TabsContent value="auth">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">{t('settingsPage.serverInfo')}</CardTitle>
+              <CardTitle className="text-base">{t('settings.auth')}</CardTitle>
             </CardHeader>
             <CardContent>
-              {loading ? (
-                <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
-              ) : (
-                <div className="space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">{t('settingsPage.version')}</Label>
-                      <p className="text-sm font-medium">{systemInfo?.version ?? '—'}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">{t('settingsPage.uptime')}</Label>
-                      <p className="text-sm font-medium">{systemInfo?.uptime ?? '—'}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">{t('settingsPage.rustVersion')}</Label>
-                      <p className="text-sm font-medium">{systemInfo?.rust_version ?? '—'}</p>
-                    </div>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-3 mt-4">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">{t('settingsPage.serverHost')}</Label>
-                      <p className="text-sm font-medium font-mono">{systemInfo?.server_host ?? '—'}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">{t('settingsPage.gatewayPort')}</Label>
-                      <p className="text-sm font-medium font-mono">{systemInfo?.gateway_port ?? '—'}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">{t('settingsPage.consolePort')}</Label>
-                      <p className="text-sm font-medium font-mono">{systemInfo?.console_port ?? '—'}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <div className="grid gap-6 sm:grid-cols-2 max-w-2xl">
+                <NumberField label={t('settings.accessTtl')} value={accessTtl} onChange={setAccessTtl} min={60} max={86400} />
+                <NumberField label={t('settings.refreshTtl')} value={refreshTtl} onChange={setRefreshTtl} min={1} max={365} />
+                <NumberField label={t('settings.signatureDrift')} value={signatureDrift} onChange={setSignatureDrift} min={0} max={3600} />
+                <NumberField label={t('settings.nonceTtl')} value={nonceTtl} onChange={setNonceTtl} min={0} max={3600} />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="oidc">
+        {/* ---------------------------------------------------------------- */}
+        {/* Gateway Tab                                                       */}
+        {/* ---------------------------------------------------------------- */}
+        <TabsContent value="gateway">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">{t('settingsPage.oidcTitle')}</CardTitle>
+              <CardTitle className="text-base">{t('settings.gateway')}</CardTitle>
             </CardHeader>
             <CardContent>
-              {loading ? (
-                <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">{t('common.status')}</Label>
-                    <Badge variant={oidcConfig?.enabled ? 'default' : 'secondary'}>
-                      {oidcConfig?.enabled ? t('common.enabled') : t('common.disabled')}
-                    </Badge>
-                  </div>
-                  <Separator />
-                  <div>
-                    <Label className="text-xs text-muted-foreground">{t('settingsPage.issuerUrl')}</Label>
-                    <p className="mt-1 font-mono text-sm">{oidcConfig?.issuer_url ?? '—'}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">{t('settingsPage.clientId')}</Label>
-                    <p className="mt-1 font-mono text-sm">
-                      {oidcConfig?.client_id
-                        ? `${oidcConfig.client_id.slice(0, 8)}${'*'.repeat(Math.max(0, oidcConfig.client_id.length - 8))}`
-                        : '—'}
-                    </p>
-                  </div>
-                </div>
-              )}
+              <div className="grid gap-6 sm:grid-cols-2 max-w-2xl">
+                <NumberField
+                  label={t('settings.cacheTtl')}
+                  value={cacheTtl}
+                  onChange={setCacheTtl}
+                  min={0}
+                  max={86400}
+                  hint={t('settings.zeroDisabled')}
+                />
+                <NumberField
+                  label={`${t('settingsPage.gatewayPort')} — Request Timeout (s)`}
+                  value={requestTimeout}
+                  onChange={setRequestTimeout}
+                  min={1}
+                  max={600}
+                  readOnly
+                  hint={t('settings.requiresRestart')}
+                />
+                <NumberField
+                  label="Body Limit (bytes)"
+                  value={bodyLimit}
+                  onChange={setBodyLimit}
+                  min={1024}
+                  max={104857600}
+                  readOnly
+                  hint={t('settings.requiresRestart')}
+                />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="audit">
+        {/* ---------------------------------------------------------------- */}
+        {/* Security Tab                                                      */}
+        {/* ---------------------------------------------------------------- */}
+        <TabsContent value="security">
+          <div className="space-y-6">
+            {/* Content filter patterns */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">{t('settings.contentFilterPatterns')}</CardTitle>
+                  <Button variant="outline" size="sm" onClick={addContentFilter}>
+                    <Plus className="h-4 w-4" />
+                    {t('settings.addPattern')}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {contentFilters.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t('common.noData')}</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t('settings.pattern')}</TableHead>
+                        <TableHead>{t('settings.severity')}</TableHead>
+                        <TableHead>{t('settings.category')}</TableHead>
+                        <TableHead className="w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {contentFilters.map((cf, i) => (
+                        <TableRow key={i}>
+                          <TableCell>
+                            <Input
+                              value={cf.pattern}
+                              onChange={(e) => updateContentFilter(i, 'pattern', e.target.value)}
+                              placeholder="regex pattern"
+                              className="h-8"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={cf.severity}
+                              onValueChange={(v) => v && updateContentFilter(i, 'severity', v)}
+                            >
+                              <SelectTrigger className="h-8 w-28">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="low">Low</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="high">High</SelectItem>
+                                <SelectItem value="critical">Critical</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              value={cf.category}
+                              onChange={(e) => updateContentFilter(i, 'category', e.target.value)}
+                              placeholder="category"
+                              className="h-8"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon-sm" onClick={() => removeContentFilter(i)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* PII redactor patterns */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">{t('settings.piiPatterns')}</CardTitle>
+                  <Button variant="outline" size="sm" onClick={addPiiPattern}>
+                    <Plus className="h-4 w-4" />
+                    {t('settings.addPattern')}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {piiPatterns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t('common.noData')}</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t('common.name')}</TableHead>
+                        <TableHead>{t('settings.regex')}</TableHead>
+                        <TableHead>{t('settings.placeholder')}</TableHead>
+                        <TableHead className="w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {piiPatterns.map((pp, i) => (
+                        <TableRow key={i}>
+                          <TableCell>
+                            <Input
+                              value={pp.name}
+                              onChange={(e) => updatePiiPattern(i, 'name', e.target.value)}
+                              placeholder="name"
+                              className="h-8"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              value={pp.regex}
+                              onChange={(e) => updatePiiPattern(i, 'regex', e.target.value)}
+                              placeholder="\\d{3}-\\d{2}-\\d{4}"
+                              className="h-8 font-mono text-xs"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              value={pp.placeholder_prefix}
+                              onChange={(e) => updatePiiPattern(i, 'placeholder_prefix', e.target.value)}
+                              placeholder="[SSN]"
+                              className="h-8"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon-sm" onClick={() => removePiiPattern(i)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Budget Tab                                                        */}
+        {/* ---------------------------------------------------------------- */}
+        <TabsContent value="budget">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">{t('settingsPage.auditTitle')}</CardTitle>
+              <CardTitle className="text-base">{t('settings.budget')}</CardTitle>
             </CardHeader>
             <CardContent>
-              {loading ? (
-                <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-sm">{t('settingsPage.quickwit')}</Label>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {auditConfig?.quickwit_url || '—'}
-                      </p>
-                    </div>
-                    <Badge variant={auditConfig?.quickwit_url ? 'default' : 'secondary'}>
-                      {auditConfig?.quickwit_url ? t('settingsPage.connected') : t('settingsPage.disconnected')}
-                    </Badge>
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-sm">{t('settingsPage.logForwarding')}</Label>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {t('settingsPage.logForwardingHint')}
-                      </p>
-                    </div>
-                    <a href="/admin/log-forwarders" className="text-sm text-primary hover:underline">
-                      {t('settingsPage.manage')}
-                    </a>
-                  </div>
+              <div className="space-y-6 max-w-lg">
+                <div className="space-y-1">
+                  <Label className="text-sm">{t('settings.thresholds')}</Label>
+                  <Input
+                    value={alertThresholds}
+                    onChange={(e) => setAlertThresholds(e.target.value)}
+                    placeholder="50, 80, 100"
+                  />
+                  <p className="text-xs text-muted-foreground">Comma-separated numeric thresholds</p>
                 </div>
-              )}
+                <div className="space-y-1">
+                  <Label className="text-sm">{t('settings.webhookUrl')}</Label>
+                  <Input
+                    value={webhookUrl}
+                    onChange={(e) => setWebhookUrl(e.target.value)}
+                    placeholder="https://hooks.example.com/budget"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* API Keys Config Tab                                               */}
+        {/* ---------------------------------------------------------------- */}
+        <TabsContent value="apikeys">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('settings.apiKeysConfig')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-6 sm:grid-cols-2 max-w-2xl">
+                <NumberField label={t('settings.defaultExpiry')} value={defaultExpiry} onChange={setDefaultExpiry} min={0} max={3650} hint={t('settings.zeroDisabled')} />
+                <NumberField label={t('settings.inactivityTimeout')} value={inactivityTimeout} onChange={setInactivityTimeout} min={0} max={365} hint={t('settings.zeroDisabled')} />
+                <NumberField label={t('settings.rotationPeriod')} value={rotationPeriod} onChange={setRotationPeriod} min={0} max={365} hint={t('settings.zeroDisabled')} />
+                <NumberField label={t('settings.gracePeriod')} value={gracePeriod} onChange={setGracePeriod} min={0} max={720} />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Data Retention Tab                                                */}
+        {/* ---------------------------------------------------------------- */}
+        <TabsContent value="data">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('settings.dataRetention')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-6 sm:grid-cols-2 max-w-2xl">
+                <NumberField label={t('settings.usageRetention')} value={usageRetention} onChange={setUsageRetention} min={1} max={3650} />
+                <NumberField label={t('settings.auditRetention')} value={auditRetention} onChange={setAuditRetention} min={1} max={3650} />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

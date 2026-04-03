@@ -342,7 +342,206 @@ curl http://localhost:3000/health
 
 ---
 
+### GET /health/live
+
+Liveness probe. Returns 200 if the server process is running.
+
+**Authentication:** Public
+
+#### Response Body
+
+```json
+{
+  "status": "alive"
+}
+```
+
+#### Example
+
+```bash
+curl http://localhost:3000/health/live
+```
+
+---
+
+### GET /health/ready
+
+Readiness probe. Returns 200 if all critical dependencies (PostgreSQL, Redis) are reachable. Returns 503 if any critical dependency is down.
+
+**Authentication:** Public
+
+#### Response Body (healthy)
+
+```json
+{
+  "status": "ready"
+}
+```
+
+#### Response Body (unhealthy)
+
+```json
+{
+  "status": "not_ready",
+  "reason": "redis unreachable"
+}
+```
+
+#### Example
+
+```bash
+curl http://localhost:3000/health/ready
+```
+
+| Status | Condition                               |
+| ------ | --------------------------------------- |
+| 200    | All critical dependencies healthy       |
+| 503    | PostgreSQL or Redis is unreachable      |
+
+---
+
+### GET /metrics
+
+Prometheus-compatible metrics endpoint. Exposes request latency histograms, token throughput counters, active connection gauges, and error rate counters.
+
+**Authentication:** Public (unauthenticated)
+
+**Port:** 3000 (gateway)
+
+#### Response
+
+```
+# HELP http_requests_total Total number of HTTP requests
+# TYPE http_requests_total counter
+http_requests_total{method="POST",endpoint="/v1/chat/completions",status="200"} 1520
+
+# HELP http_request_duration_seconds HTTP request latency
+# TYPE http_request_duration_seconds histogram
+http_request_duration_seconds_bucket{endpoint="/v1/chat/completions",le="0.5"} 300
+...
+```
+
+#### Example
+
+```bash
+curl http://localhost:3000/metrics
+```
+
+> **Note:** This endpoint is intended for Prometheus scraping. Restrict access via network policies in production.
+
+---
+
 ## Console Endpoints (port 3001)
+
+### Setup
+
+#### GET /api/setup/status
+
+Check whether the system has been initialized (i.e., whether an admin user exists).
+
+**Authentication:** Public
+
+#### Response Body
+
+```json
+{
+  "initialized": false,
+  "needs_setup": true
+}
+```
+
+| Field          | Type    | Description                                  |
+| -------------- | ------- | -------------------------------------------- |
+| `initialized`  | boolean | `true` if an admin user has been created     |
+| `needs_setup`  | boolean | `true` if the setup wizard should be shown   |
+
+#### Example
+
+```bash
+curl http://localhost:3001/api/setup/status
+```
+
+---
+
+#### POST /api/setup/initialize
+
+Perform initial system setup: create the first admin user and optionally configure the first AI provider. This endpoint is only available when the system has not yet been initialized.
+
+**Authentication:** Public (only when uninitialized)
+
+#### Request Body
+
+```json
+{
+  "admin": {
+    "email": "admin@example.com",
+    "display_name": "Admin",
+    "password": "your-secure-password"
+  },
+  "provider": {
+    "name": "openai-prod",
+    "display_name": "OpenAI Production",
+    "provider_type": "openai",
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "sk-..."
+  }
+}
+```
+
+| Field                    | Type   | Required | Description                                     |
+| ------------------------ | ------ | -------- | ----------------------------------------------- |
+| `admin.email`            | string | Yes      | Admin email address                             |
+| `admin.display_name`     | string | Yes      | Admin display name                              |
+| `admin.password`         | string | Yes      | Admin password (minimum 8 characters)           |
+| `provider`               | object | No       | Optional first provider configuration           |
+| `provider.name`          | string | Yes*     | Unique slug identifier (* required if provider set) |
+| `provider.display_name`  | string | Yes*     | Human-readable name                             |
+| `provider.provider_type` | string | Yes*     | One of `openai`, `anthropic`, `azure`, `custom` |
+| `provider.base_url`      | string | Yes*     | Provider API base URL                           |
+| `provider.api_key`       | string | Yes*     | Provider API key                                |
+
+#### Response Body
+
+```json
+{
+  "access_token": "eyJhbGciOi...",
+  "refresh_token": "eyJhbGciOi...",
+  "token_type": "Bearer",
+  "expires_in": 900,
+  "user": {
+    "id": "uuid",
+    "email": "admin@example.com",
+    "display_name": "Admin",
+    "role": "admin"
+  }
+}
+```
+
+#### Example
+
+```bash
+curl -X POST http://localhost:3001/api/setup/initialize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "admin": {
+      "email": "admin@example.com",
+      "display_name": "Admin",
+      "password": "your-secure-password"
+    }
+  }'
+```
+
+#### Error Responses
+
+| Status | Condition                                    |
+| ------ | -------------------------------------------- |
+| 400    | System already initialized                   |
+| 422    | Validation error (weak password, invalid email) |
+| 429    | Rate limit exceeded (5 requests per minute)  |
+
+> **Security:** This endpoint is rate-limited to 5 requests per minute and performs a double-check against the database to prevent race conditions.
+
+---
 
 ### Authentication
 
@@ -764,6 +963,160 @@ curl -X DELETE http://localhost:3001/api/keys/550e8400-e29b-41d4-a716-4466554400
 | ------ | ---------------------------------- |
 | 401    | Invalid JWT                        |
 | 404    | Key not found or not owned by user |
+
+---
+
+#### PATCH /api/keys/{id}
+
+Update settings for an existing API key.
+
+**Authentication:** JWT
+
+#### Path Parameters
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `id`      | UUID | Key ID      |
+
+#### Request Body
+
+```json
+{
+  "allowed_models": ["gpt-4o", "claude-sonnet-4-20250514"],
+  "rate_limit_rpm": 120,
+  "expires_in_days": 60,
+  "rotation_interval_days": 90,
+  "inactivity_timeout_days": 30
+}
+```
+
+| Field                     | Type            | Required | Description                                         |
+| ------------------------- | --------------- | -------- | --------------------------------------------------- |
+| `allowed_models`          | array\<string\> | No       | Update the list of permitted models                 |
+| `rate_limit_rpm`          | integer         | No       | Update requests per minute limit                    |
+| `expires_in_days`         | integer         | No       | Set or update expiry (days from now)                |
+| `rotation_interval_days`  | integer         | No       | Set automatic rotation interval                     |
+| `inactivity_timeout_days` | integer         | No       | Auto-disable key after N days of inactivity         |
+
+#### Response Body
+
+```json
+{
+  "id": "uuid",
+  "name": "Production Key",
+  "prefix": "ab-prod",
+  "allowed_models": ["gpt-4o", "claude-sonnet-4-20250514"],
+  "rate_limit_rpm": 120,
+  "expires_at": "2026-08-01T00:00:00Z",
+  "rotation_interval_days": 90,
+  "inactivity_timeout_days": 30,
+  "updated_at": "2026-04-01T10:00:00Z"
+}
+```
+
+#### Example
+
+```bash
+curl -X PATCH http://localhost:3001/api/keys/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer eyJhbGciOi..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rate_limit_rpm": 120,
+    "inactivity_timeout_days": 30
+  }'
+```
+
+#### Error Responses
+
+| Status | Condition                          |
+| ------ | ---------------------------------- |
+| 401    | Invalid JWT                        |
+| 404    | Key not found or not owned by user |
+| 422    | Validation error                   |
+
+---
+
+#### POST /api/keys/{id}/rotate
+
+Rotate an API key. Generates a new key value and returns it. The old key enters a grace period (configurable) during which both the old and new keys are accepted.
+
+**Authentication:** JWT
+
+#### Path Parameters
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `id`      | UUID | Key ID      |
+
+#### Response Body
+
+```json
+{
+  "id": "uuid",
+  "name": "Production Key",
+  "key": "ab-sk-newkey123456...",
+  "grace_period_ends_at": "2026-04-02T10:00:00Z",
+  "rotated_at": "2026-04-01T10:00:00Z"
+}
+```
+
+> **Important:** The new `key` value is only returned once. The old key remains valid until `grace_period_ends_at`.
+
+#### Example
+
+```bash
+curl -X POST http://localhost:3001/api/keys/550e8400-e29b-41d4-a716-446655440000/rotate \
+  -H "Authorization: Bearer eyJhbGciOi..."
+```
+
+#### Error Responses
+
+| Status | Condition                          |
+| ------ | ---------------------------------- |
+| 401    | Invalid JWT                        |
+| 404    | Key not found or not owned by user |
+
+---
+
+#### GET /api/keys/expiring
+
+List API keys that are expiring within the specified number of days.
+
+**Authentication:** JWT
+
+#### Query Parameters
+
+| Parameter | Type    | Required | Default | Description                          |
+| --------- | ------- | -------- | ------- | ------------------------------------ |
+| `days`    | integer | No       | 7       | Number of days to look ahead         |
+
+#### Response Body
+
+```json
+[
+  {
+    "id": "uuid",
+    "name": "Production Key",
+    "prefix": "ab-prod",
+    "expires_at": "2026-04-07T00:00:00Z",
+    "days_remaining": 5,
+    "owner_email": "user@example.com"
+  }
+]
+```
+
+#### Example
+
+```bash
+curl "http://localhost:3001/api/keys/expiring?days=14" \
+  -H "Authorization: Bearer eyJhbGciOi..."
+```
+
+#### Error Responses
+
+| Status | Condition   |
+| ------ | ----------- |
+| 401    | Invalid JWT |
 
 ---
 
@@ -1463,9 +1816,9 @@ curl "http://localhost:3001/api/audit/logs?q=provider.create&from=2026-03-01T00:
 
 ### Admin Settings
 
-#### GET /api/admin/settings/system
+#### GET /api/admin/settings
 
-Retrieve system-level configuration settings.
+Retrieve all settings grouped by category.
 
 **Authentication:** JWT (Admin)
 
@@ -1473,62 +1826,136 @@ Retrieve system-level configuration settings.
 
 ```json
 {
-  "gateway_port": 3000,
-  "console_port": 3001,
-  "cors_origins": ["https://console.example.com"],
-  "registration_enabled": true,
-  "default_rate_limit_rpm": 60
+  "auth": {
+    "jwt_access_ttl_seconds": 900,
+    "jwt_refresh_ttl_seconds": 604800
+  },
+  "cache": {
+    "cache_ttl_seconds": 300
+  },
+  "security": {
+    "signature_drift_seconds": 300,
+    "nonce_ttl_seconds": 300,
+    "content_filter_patterns": [],
+    "pii_patterns": []
+  },
+  "budget": {
+    "budget_warning_threshold": 0.8,
+    "budget_critical_threshold": 0.95
+  },
+  "keys": {
+    "api_key_max_expiry_days": 365,
+    "api_key_default_rate_limit_rpm": 60
+  },
+  "general": {
+    "data_retention_days": 30,
+    "site_name": "AgentBastion"
+  }
 }
 ```
 
 #### Example
 
 ```bash
-curl http://localhost:3001/api/admin/settings/system \
+curl http://localhost:3001/api/admin/settings \
   -H "Authorization: Bearer eyJhbGciOi..."
 ```
 
 ---
 
-#### GET /api/admin/settings/oidc
+#### PATCH /api/admin/settings
 
-Retrieve OIDC/SSO configuration (secrets redacted).
+Update one or more settings. Settings are validated before being persisted.
 
 **Authentication:** JWT (Admin)
+
+#### Request Body
+
+```json
+{
+  "settings": {
+    "jwt_access_ttl_seconds": 1800,
+    "site_name": "My AI Gateway",
+    "data_retention_days": 60
+  }
+}
+```
+
+| Field      | Type   | Required | Description                                |
+| ---------- | ------ | -------- | ------------------------------------------ |
+| `settings` | object | Yes      | Key-value map of settings to update        |
 
 #### Response Body
 
 ```json
 {
-  "enabled": true,
-  "issuer_url": "https://login.microsoftonline.com/tenant-id/v2.0",
-  "client_id": "app-client-id",
-  "redirect_url": "https://console.example.com/api/auth/sso/callback",
-  "scopes": ["openid", "email", "profile"]
+  "updated": ["jwt_access_ttl_seconds", "site_name", "data_retention_days"],
+  "settings": {
+    "jwt_access_ttl_seconds": 1800,
+    "site_name": "My AI Gateway",
+    "data_retention_days": 60
+  }
 }
 ```
 
-> **Note:** The `client_secret` is never exposed in responses.
+#### Example
+
+```bash
+curl -X PATCH http://localhost:3001/api/admin/settings \
+  -H "Authorization: Bearer eyJhbGciOi..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "settings": {
+      "jwt_access_ttl_seconds": 1800,
+      "data_retention_days": 90
+    }
+  }'
+```
+
+#### Error Responses
+
+| Status | Condition                       |
+| ------ | ------------------------------- |
+| 401    | Invalid JWT                     |
+| 403    | Not an admin                    |
+| 422    | Validation error (invalid key or value) |
 
 ---
 
-#### GET /api/admin/settings/audit
+#### GET /api/admin/settings/category/{category}
 
-Retrieve audit logging configuration.
+Retrieve settings for a specific category.
 
 **Authentication:** JWT (Admin)
 
+#### Path Parameters
+
+| Parameter  | Type   | Description                                                                    |
+| ---------- | ------ | ------------------------------------------------------------------------------ |
+| `category` | string | One of `auth`, `cache`, `security`, `budget`, `keys`, `general`, `system`, `oidc`, `audit` |
+
 #### Response Body
 
-```json
-{
-  "quickwit_enabled": true,
-  "quickwit_url": "http://quickwit:7280",
-  "quickwit_index": "agentbastion-audit",
-  "syslog_enabled": true,
-  "syslog_addr": "siem.corp.internal:514"
-}
+Returns only the settings for the requested category (same structure as the corresponding section in `GET /api/admin/settings`).
+
+#### Example
+
+```bash
+curl http://localhost:3001/api/admin/settings/category/auth \
+  -H "Authorization: Bearer eyJhbGciOi..."
 ```
+
+#### Error Responses
+
+| Status | Condition          |
+| ------ | ------------------ |
+| 401    | Invalid JWT        |
+| 403    | Not an admin       |
+| 404    | Unknown category   |
+
+---
+
+> **Note:** The legacy endpoints `GET /api/admin/settings/system`, `GET /api/admin/settings/oidc`, and `GET /api/admin/settings/audit` remain available as aliases for `GET /api/admin/settings/category/{category}` with the respective category.
 
 ---
 
@@ -1536,15 +1963,21 @@ Retrieve audit logging configuration.
 
 #### GET /api/health
 
-Detailed health check reporting connectivity to backing services.
+Detailed health check reporting connectivity to backing services, latency metrics, and connection pool status.
 
 **Authentication:** Public
 
-#### Response Body
+#### Response Body (healthy)
 
 ```json
 {
   "status": "ok",
+  "pg_latency_ms": 2.5,
+  "redis_latency_ms": 0.8,
+  "quickwit_latency_ms": 5.1,
+  "pool_idle": 8,
+  "pool_active": 2,
+  "uptime_seconds": 86400,
   "services": {
     "postgres": "ok",
     "redis": "ok",
@@ -1553,18 +1986,36 @@ Detailed health check reporting connectivity to backing services.
 }
 ```
 
-If a dependency is unreachable:
+#### Response Body (degraded)
+
+If a critical dependency (PostgreSQL or Redis) is unreachable, the endpoint returns HTTP 503:
 
 ```json
 {
   "status": "degraded",
+  "pg_latency_ms": null,
+  "redis_latency_ms": 0.8,
+  "quickwit_latency_ms": 5.1,
+  "pool_idle": 0,
+  "pool_active": 0,
+  "uptime_seconds": 86400,
   "services": {
-    "postgres": "ok",
+    "postgres": "error",
     "redis": "ok",
-    "quickwit": "error"
+    "quickwit": "ok"
   }
 }
 ```
+
+| Field                | Type    | Description                                  |
+| -------------------- | ------- | -------------------------------------------- |
+| `status`             | string  | `ok` or `degraded`                           |
+| `pg_latency_ms`      | number  | PostgreSQL ping latency (null if unreachable) |
+| `redis_latency_ms`   | number  | Redis ping latency (null if unreachable)     |
+| `quickwit_latency_ms`| number  | Quickwit ping latency (null if unreachable)  |
+| `pool_idle`          | integer | Number of idle database connections          |
+| `pool_active`        | integer | Number of active database connections        |
+| `uptime_seconds`     | integer | Server uptime in seconds                     |
 
 #### Example
 
@@ -1575,4 +2026,4 @@ curl http://localhost:3001/api/health
 | Status | Condition                               |
 | ------ | --------------------------------------- |
 | 200    | All services healthy                    |
-| 503    | One or more backing services unreachable|
+| 503    | Critical dependency (PG or Redis) down  |

@@ -28,3 +28,4 @@ utoipa = { workspace = true }
 sha2 = { workspace = true }
 regex = "1"
 rand = { workspace = true }
+metrics = { workspace = true }

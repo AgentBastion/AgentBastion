@@ -14,12 +14,21 @@ AgentBastion supports three authentication mechanisms. The gateway accepts any o
 
 AgentBastion issues two JWT tokens upon successful authentication:
 
-| Token          | Lifetime | Purpose                                      |
-| -------------- | -------- | -------------------------------------------- |
-| Access token   | 15 min   | Short-lived credential for API authorization |
-| Refresh token  | 7 days   | Used to obtain new access/refresh token pair |
+| Token          | Default Lifetime | Purpose                                      |
+| -------------- | ---------------- | -------------------------------------------- |
+| Access token   | 900s (15 min)    | Short-lived credential for API authorization |
+| Refresh token  | 604800s (7 days) | Used to obtain new access/refresh token pair |
+
+Both TTL values are configurable via the admin Web UI (`jwt_access_ttl_seconds` and `jwt_refresh_ttl_seconds` settings) without requiring a server restart.
 
 **Signing algorithm:** HS256 with a shared secret (`JWT_SECRET` environment variable). A migration to RS256 with asymmetric key pairs is planned for a future release.
+
+**Secret requirements:**
+- `JWT_SECRET` must be at least 32 characters long.
+- At startup, AgentBastion performs an entropy check and rejects secrets that are trivially weak (e.g., all identical characters, common patterns).
+- Generate a strong secret with: `openssl rand -hex 32`
+
+**Clock skew tolerance:** A 30-second leeway is applied when validating token expiration (`exp`) and not-before (`nbf`) claims, accommodating minor clock differences between distributed services.
 
 **Token claims:**
 
@@ -44,12 +53,23 @@ API keys provide long-lived authentication for programmatic access to the gatewa
 | --------------- | ------------------------------------------------ |
 | Format          | Prefixed with `ab-` (e.g. `ab-sk-a1b2c3d4...`)  |
 | Storage         | SHA-256 hash stored in PostgreSQL                |
-| Validation      | Middleware hashes the incoming key and looks it up|
+| Validation      | Middleware hashes the incoming key and looks it up (filters `deleted_at IS NULL`) |
 | Scoping         | Optional `allowed_models` restriction            |
 | Rate limiting   | Optional per-key RPM limit, enforced via Redis   |
 | Expiration      | Optional TTL set at creation time                |
 
 The raw key value is returned exactly once at creation time. It cannot be retrieved afterward because only the hash is stored.
+
+**Lifecycle management:**
+
+API keys now support a full lifecycle with the following capabilities:
+
+- **Rotation:** Keys can be rotated via `POST /api/keys/{id}/rotate`. A new key is generated and returned; the old key enters a configurable grace period during which both old and new keys are accepted. The `grace_period_ends_at` timestamp indicates when the old key will stop working.
+- **Grace period:** After rotation, the API key auth middleware accepts both the old and new key hashes until `grace_period_ends_at` expires, allowing clients to transition without downtime.
+- **Inactivity timeout:** Keys can be configured with an `inactivity_timeout_days` value. If a key is not used within that period, it is automatically disabled by the background lifecycle task.
+- **Auto-disable:** Keys that exceed their inactivity timeout are soft-disabled (not deleted), allowing administrators to re-enable them if needed.
+- **Expiry monitoring:** Use `GET /api/keys/expiring?days=N` to list keys approaching their expiration date.
+- **Team validation:** API key creation validates team membership -- users can only create keys within teams they belong to.
 
 ### 1.3 OIDC / SSO
 
@@ -190,6 +210,10 @@ The following headers are set on all responses:
 | `X-Content-Type-Options`  | `nosniff`          | Prevents MIME type sniffing               |
 | `X-Frame-Options`         | `DENY`             | Prevents clickjacking via iframes         |
 
+**Content Security Policy (console port only):**
+
+The console port (3001) includes a `Content-Security-Policy` header to mitigate XSS and data injection attacks. The policy restricts script sources, style sources, and connection endpoints to known origins.
+
 ### 4.4 Request Timeouts
 
 | Server  | Timeout | Rationale                                        |
@@ -266,13 +290,54 @@ This allows integration with SIEM platforms such as Splunk, Elastic SIEM, Micros
 
 ---
 
-## 6. Hardening Checklist
+## 6. Startup Validation
+
+AgentBastion validates all secrets and dependencies before starting the server. If any critical requirement is not met, the process exits with a clear error message rather than running in a degraded state.
+
+Validated at startup:
+- `JWT_SECRET` is present, at least 32 characters, and passes an entropy check
+- `ENCRYPTION_KEY` is present and a valid 64-character hex string
+- PostgreSQL is reachable and responds to a test query
+- Redis is reachable and responds to a PING
+- OIDC variables are either all set or all absent (partial configuration is rejected)
+- Quickwit connectivity (if configured; logs a warning but does not block startup)
+
+---
+
+## 7. Setup Endpoint Security
+
+The `POST /api/setup/initialize` endpoint allows creating the first admin user without authentication. To prevent abuse:
+
+- **Rate limiting:** The endpoint is limited to 5 requests per minute per IP address.
+- **Double-check:** Before creating the admin user, the endpoint performs a database query to verify no admin user exists. This prevents race conditions where two concurrent requests could both create admin accounts.
+- **Disabled after use:** Once the system is initialized, the endpoint returns `400 Bad Request` for all subsequent calls, regardless of rate limit status.
+
+---
+
+## 8. Soft-Delete and Data Retention
+
+AgentBastion uses soft-delete for critical resources:
+
+| Resource     | Behavior                                                                          |
+| ------------ | --------------------------------------------------------------------------------- |
+| Users        | `deleted_at` is set; all sessions are revoked; the user cannot log in             |
+| Providers    | `deleted_at` is set; the provider's models become unavailable for new requests    |
+| API Keys     | `deleted_at` is set; the key is immediately rejected by the auth middleware       |
+
+**Data retention policy:**
+- Soft-deleted records are retained for a configurable period (default: 30 days, controlled by the `data_retention_days` setting).
+- A background task periodically purges records older than the retention period.
+- Account deletion via the API is always a soft-delete operation: the user's sessions are revoked, and `deleted_at` is marked. The record is permanently removed only after the retention period expires.
+
+---
+
+## 9. Hardening Checklist
 
 Use this checklist when preparing AgentBastion for production deployment.
 
 ### Secrets and Cryptography
 
-- [ ] Set `JWT_SECRET` to a cryptographically random value (at least 256 bits):
+- [ ] Set `JWT_SECRET` to a cryptographically random value (minimum 32 characters, recommended 64 hex characters / 256 bits):
   ```bash
   openssl rand -hex 32
   ```
@@ -282,6 +347,7 @@ Use this checklist when preparing AgentBastion for production deployment.
   ```
 - [ ] Rotate `JWT_SECRET` periodically (note: rotation invalidates all active tokens)
 - [ ] Store all secrets in a proper secrets manager (Vault, AWS Secrets Manager, K8s Secrets) rather than plaintext `.env` files
+- [ ] Verify startup validation passes without warnings (check logs for entropy check results)
 
 ### Network
 
@@ -306,13 +372,22 @@ Use this checklist when preparing AgentBastion for production deployment.
 - [ ] Restrict PostgreSQL access to only the AgentBastion service account
 - [ ] Run database migrations only from a privileged CI/CD pipeline, not from the application at runtime
 
+### API Key Lifecycle
+
+- [ ] Set appropriate `inactivity_timeout_days` on API keys to auto-disable unused keys
+- [ ] Establish a key rotation schedule and use `POST /api/keys/{id}/rotate` for zero-downtime rotation
+- [ ] Periodically review expiring keys via `GET /api/keys/expiring?days=30`
+- [ ] Configure `data_retention_days` to comply with your data retention policy
+
 ### Audit and Monitoring
 
 - [ ] Set up log rotation for application logs
 - [ ] Verify Quickwit audit index is being populated
 - [ ] Configure syslog forwarding to your SIEM if applicable (`SYSLOG_ADDR`)
 - [ ] Set up alerts for `auth.login_failed` spikes (potential brute-force)
-- [ ] Monitor the `/api/health` and `/health` endpoints with your infrastructure monitoring system
+- [ ] Monitor the `/api/health`, `/health/live`, and `/health/ready` endpoints with your infrastructure monitoring system
+- [ ] Configure Prometheus scraping of the `/metrics` endpoint (gateway port 3000)
+- [ ] Set up alerts for API key inactivity and expiration events
 
 ### Container and Runtime
 

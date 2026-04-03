@@ -33,12 +33,22 @@ impl JwtManager {
         email: &str,
         roles: Vec<String>,
     ) -> anyhow::Result<String> {
+        self.create_access_token_with_ttl(user_id, email, roles, 900)
+    }
+
+    pub fn create_access_token_with_ttl(
+        &self,
+        user_id: Uuid,
+        email: &str,
+        roles: Vec<String>,
+        ttl_secs: i64,
+    ) -> anyhow::Result<String> {
         let now = Utc::now();
         let claims = Claims {
             sub: user_id,
             email: email.to_string(),
             roles,
-            exp: (now + Duration::minutes(15)).timestamp(),
+            exp: (now + Duration::seconds(ttl_secs)).timestamp(),
             iat: now.timestamp(),
             token_type: "access".to_string(),
         };
@@ -51,12 +61,22 @@ impl JwtManager {
         email: &str,
         roles: Vec<String>,
     ) -> anyhow::Result<String> {
+        self.create_refresh_token_with_ttl(user_id, email, roles, 7)
+    }
+
+    pub fn create_refresh_token_with_ttl(
+        &self,
+        user_id: Uuid,
+        email: &str,
+        roles: Vec<String>,
+        ttl_days: i64,
+    ) -> anyhow::Result<String> {
         let now = Utc::now();
         let claims = Claims {
             sub: user_id,
             email: email.to_string(),
             roles,
-            exp: (now + Duration::days(7)).timestamp(),
+            exp: (now + Duration::days(ttl_days)).timestamp(),
             iat: now.timestamp(),
             token_type: "refresh".to_string(),
         };
@@ -64,7 +84,9 @@ impl JwtManager {
     }
 
     pub fn verify_token(&self, token: &str) -> anyhow::Result<Claims> {
-        let token_data = decode::<Claims>(token, &self.decoding_key, &Validation::default())?;
+        let mut validation = Validation::default();
+        validation.leeway = 30; // Allow 30s clock skew
+        let token_data = decode::<Claims>(token, &self.decoding_key, &validation)?;
         Ok(token_data.claims)
     }
 }
@@ -168,5 +190,47 @@ mod tests {
 
         let claims = mgr.verify_token(&token).expect("verify should succeed");
         assert_eq!(claims.token_type, "refresh");
+    }
+
+    #[test]
+    fn access_token_custom_ttl() {
+        let mgr = test_jwt_manager();
+        let uid = test_user_id();
+        let now = Utc::now().timestamp();
+        let token = mgr
+            .create_access_token_with_ttl(uid, "ttl@example.com", vec![], 60)
+            .expect("create should succeed");
+
+        let claims = mgr.verify_token(&token).expect("verify should succeed");
+        assert_eq!(claims.token_type, "access");
+        // exp should be approximately now + 60 seconds (allow 5s tolerance)
+        let expected_exp = now + 60;
+        assert!(
+            (claims.exp - expected_exp).abs() <= 5,
+            "exp {} should be ~{} (now + 60s)",
+            claims.exp,
+            expected_exp
+        );
+    }
+
+    #[test]
+    fn refresh_token_custom_ttl() {
+        let mgr = test_jwt_manager();
+        let uid = test_user_id();
+        let now = Utc::now().timestamp();
+        let token = mgr
+            .create_refresh_token_with_ttl(uid, "ttl@example.com", vec![], 1)
+            .expect("create should succeed");
+
+        let claims = mgr.verify_token(&token).expect("verify should succeed");
+        assert_eq!(claims.token_type, "refresh");
+        // exp should be approximately now + 1 day (86400 seconds, allow 5s tolerance)
+        let expected_exp = now + 86400;
+        assert!(
+            (claims.exp - expected_exp).abs() <= 5,
+            "exp {} should be ~{} (now + 1 day)",
+            claims.exp,
+            expected_exp
+        );
     }
 }

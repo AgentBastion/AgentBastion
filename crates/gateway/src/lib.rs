@@ -12,6 +12,7 @@ pub mod providers;
 pub mod proxy;
 pub mod quota;
 pub mod rate_limiter;
+pub mod retry;
 pub mod router;
 pub mod sse_parser;
 pub mod streaming;

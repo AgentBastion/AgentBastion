@@ -5,7 +5,7 @@ use crate::providers::traits::{
 use futures::Stream;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
@@ -17,51 +17,108 @@ pub enum LoadBalanceStrategy {
     LeastFailures,
 }
 
-/// A single backend in the failover pool.
+/// Circuit breaker state for a backend.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CircuitState {
+    /// Normal operation — requests flow through.
+    Closed,
+    /// Backend is failing — requests are rejected immediately.
+    Open,
+    /// Probing — allow limited requests to test recovery.
+    HalfOpen,
+}
+
+/// A single backend in the failover pool with circuit breaker logic.
 struct FailoverBackend {
     provider: Arc<dyn DynAiProvider>,
-    healthy: AtomicBool,
+    state: RwLock<CircuitState>,
     consecutive_failures: AtomicU32,
     failure_threshold: u32,
     last_failure: RwLock<Option<Instant>>,
+    half_open_successes: AtomicU32,
+    half_open_max: u32,
 }
 
 impl FailoverBackend {
     fn new(provider: Arc<dyn DynAiProvider>, failure_threshold: u32) -> Self {
         Self {
             provider,
-            healthy: AtomicBool::new(true),
+            state: RwLock::new(CircuitState::Closed),
             consecutive_failures: AtomicU32::new(0),
             failure_threshold,
             last_failure: RwLock::new(None),
+            half_open_successes: AtomicU32::new(0),
+            half_open_max: 3,
         }
     }
 
-    fn is_healthy(&self) -> bool {
-        self.healthy.load(Ordering::Relaxed)
+    fn is_healthy_fast(&self) -> bool {
+        // Quick non-async check: if consecutive failures < threshold, likely healthy
+        self.consecutive_failures.load(Ordering::Relaxed) < self.failure_threshold
     }
 
-    fn record_success(&self) {
+    async fn record_success(&self) {
+        let state = *self.state.read().await;
         self.consecutive_failures.store(0, Ordering::Relaxed);
-        self.healthy.store(true, Ordering::Relaxed);
+
+        match state {
+            CircuitState::HalfOpen => {
+                let successes = self.half_open_successes.fetch_add(1, Ordering::Relaxed) + 1;
+                if successes >= self.half_open_max {
+                    *self.state.write().await = CircuitState::Closed;
+                    self.half_open_successes.store(0, Ordering::Relaxed);
+                    metrics::gauge!("circuit_breaker_state", "provider" => self.provider.name().to_string()).set(0.0);
+                    tracing::info!(
+                        provider = self.provider.name(),
+                        "Circuit breaker closed (recovered)"
+                    );
+                }
+            }
+            CircuitState::Open => {
+                // Should not happen, but handle gracefully
+                *self.state.write().await = CircuitState::Closed;
+                metrics::gauge!("circuit_breaker_state", "provider" => self.provider.name().to_string()).set(0.0);
+            }
+            CircuitState::Closed => {}
+        }
     }
 
     async fn record_failure(&self) {
         let prev = self.consecutive_failures.fetch_add(1, Ordering::Relaxed);
-        if prev + 1 >= self.failure_threshold {
-            self.healthy.store(false, Ordering::Relaxed);
-            *self.last_failure.write().await = Some(Instant::now());
-            tracing::warn!(
-                provider = self.provider.name(),
-                "Backend marked unhealthy after {} consecutive failures",
-                prev + 1
-            );
+        let state = *self.state.read().await;
+
+        match state {
+            CircuitState::Closed => {
+                if prev + 1 >= self.failure_threshold {
+                    *self.state.write().await = CircuitState::Open;
+                    *self.last_failure.write().await = Some(Instant::now());
+                    metrics::gauge!("circuit_breaker_state", "provider" => self.provider.name().to_string()).set(2.0);
+                    tracing::warn!(
+                        provider = self.provider.name(),
+                        "Circuit breaker OPEN after {} consecutive failures",
+                        prev + 1
+                    );
+                }
+            }
+            CircuitState::HalfOpen => {
+                // Probe failed — go back to Open
+                *self.state.write().await = CircuitState::Open;
+                *self.last_failure.write().await = Some(Instant::now());
+                self.half_open_successes.store(0, Ordering::Relaxed);
+                metrics::gauge!("circuit_breaker_state", "provider" => self.provider.name().to_string()).set(2.0);
+                tracing::warn!(
+                    provider = self.provider.name(),
+                    "Circuit breaker back to OPEN (half-open probe failed)"
+                );
+            }
+            CircuitState::Open => {}
         }
     }
 
-    /// Check whether enough time has passed to try recovering this backend.
+    /// Check whether enough time has passed to try recovering (transition Open → HalfOpen).
     async fn maybe_recover(&self, recovery_secs: u64) {
-        if self.is_healthy() {
+        let state = *self.state.read().await;
+        if state != CircuitState::Open {
             return;
         }
         let guard = self.last_failure.read().await;
@@ -69,12 +126,14 @@ impl FailoverBackend {
             && ts.elapsed() >= Duration::from_secs(recovery_secs)
         {
             drop(guard);
+            *self.state.write().await = CircuitState::HalfOpen;
+            self.half_open_successes.store(0, Ordering::Relaxed);
+            self.consecutive_failures.store(0, Ordering::Relaxed);
+            metrics::gauge!("circuit_breaker_state", "provider" => self.provider.name().to_string()).set(1.0);
             tracing::info!(
                 provider = self.provider.name(),
-                "Attempting health recovery for backend"
+                "Circuit breaker HALF-OPEN (probing recovery)"
             );
-            self.healthy.store(true, Ordering::Relaxed);
-            self.consecutive_failures.store(0, Ordering::Relaxed);
         }
     }
 }
@@ -185,7 +244,7 @@ impl DynAiProvider for FailoverProvider {
                 let idx = (start + attempt) % len;
                 let backend = &self.backends[idx];
 
-                if !backend.is_healthy() {
+                if !backend.is_healthy_fast() {
                     continue;
                 }
 
@@ -195,7 +254,7 @@ impl DynAiProvider for FailoverProvider {
                     .await
                 {
                     Ok(resp) => {
-                        backend.record_success();
+                        backend.record_success().await;
                         return Ok(resp);
                     }
                     Err(e) => {
@@ -233,7 +292,7 @@ impl DynAiProvider for FailoverProvider {
         let mut chosen_idx = None;
         for attempt in 0..len {
             let idx = (start + attempt) % len;
-            if self.backends[idx].is_healthy() {
+            if self.backends[idx].is_healthy_fast() {
                 chosen_idx = Some(idx);
                 break;
             }

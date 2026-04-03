@@ -150,7 +150,17 @@
     "createKeyBtn": "Create Key",
     "copyToClipboard": "Copy to Clipboard",
     "revoked": "Revoked",
-    "never": "Never"
+    "never": "Never",
+    "rotate": "Rotate",
+    "rotateConfirm": "Rotate this API key? The old key will remain active during the grace period.",
+    "rotateSuccess": "Key rotated successfully. Save the new key below.",
+    "editKey": "Edit Key",
+    "expiresIn": "Expires In",
+    "rotationPeriod": "Rotation Period (days)",
+    "inactivityTimeout": "Inactivity Timeout (days)",
+    "expiringSoon": "Expiring Soon",
+    "expired": "Expired",
+    "rotated": "Rotated"
   },
   "models": {
     "title": "Models",
@@ -311,6 +321,42 @@
     "connected": "Connected",
     "disconnected": "Disconnected"
   },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "auth": "Authentication",
+    "gateway": "Gateway",
+    "security": "Security",
+    "budget": "Budget Alerts",
+    "apiKeysConfig": "API Key Policies",
+    "dataRetention": "Data Retention",
+    "saved": "Settings saved successfully",
+    "saveError": "Failed to save settings",
+    "requiresRestart": "Requires restart to take effect",
+    "contentFilterPatterns": "Content Filter Patterns",
+    "piiPatterns": "PII Redactor Patterns",
+    "addPattern": "Add Pattern",
+    "pattern": "Pattern",
+    "severity": "Severity",
+    "category": "Category",
+    "regex": "Regex",
+    "placeholder": "Placeholder",
+    "thresholds": "Alert Thresholds",
+    "webhookUrl": "Webhook URL",
+    "defaultExpiry": "Default Expiry (days)",
+    "inactivityTimeout": "Inactivity Timeout (days)",
+    "rotationPeriod": "Rotation Period (days)",
+    "gracePeriod": "Grace Period (hours)",
+    "usageRetention": "Usage Records Retention (days)",
+    "auditRetention": "Audit Logs Retention (days)",
+    "siteName": "Site Name",
+    "accessTtl": "Access Token TTL (seconds)",
+    "refreshTtl": "Refresh Token TTL (days)",
+    "signatureDrift": "Signature Drift (seconds)",
+    "nonceTtl": "Nonce TTL (seconds)",
+    "cacheTtl": "Cache TTL (seconds)",
+    "zeroDisabled": "0 = disabled"
+  },
   "logs": {
     "title": "Request Logs",
     "subtitle": "Gateway request and response logs",
@@ -360,5 +406,51 @@
   "notFound": {
     "title": "404",
     "message": "Page not found"
+  },
+  "setup": {
+    "title": "Welcome to AgentBastion",
+    "subtitle": "Enterprise AI API Gateway & MCP Management Platform",
+    "getStarted": "Get Started",
+    "steps": {
+      "welcome": "Welcome",
+      "admin": "Admin Account",
+      "settings": "Settings",
+      "provider": "Provider",
+      "complete": "Complete"
+    },
+    "admin": {
+      "title": "Create Admin Account",
+      "subtitle": "Set up your super admin account",
+      "email": "Email",
+      "displayName": "Display Name",
+      "password": "Password",
+      "confirmPassword": "Confirm Password",
+      "passwordMismatch": "Passwords do not match",
+      "passwordTooShort": "Password must be at least 8 characters"
+    },
+    "settings": {
+      "title": "Site Settings",
+      "subtitle": "Configure your AgentBastion instance",
+      "siteName": "Site Name"
+    },
+    "provider": {
+      "title": "Add First Provider",
+      "subtitle": "Connect your first AI provider (optional)",
+      "skip": "Skip for now",
+      "providerType": "Provider Type",
+      "name": "Name",
+      "displayName": "Display Name",
+      "baseUrl": "Base URL",
+      "apiKey": "API Key"
+    },
+    "complete": {
+      "title": "Setup Complete!",
+      "subtitle": "Your AgentBastion instance is ready",
+      "apiKeyLabel": "Your Admin API Key",
+      "apiKeyWarning": "Save this key now. It will not be shown again.",
+      "goToLogin": "Go to Login"
+    },
+    "next": "Next",
+    "back": "Back"
   }
 }

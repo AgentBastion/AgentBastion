@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   createRouter,
   createRootRoute,
@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { AppShell } from '@/components/layout/app-shell';
 import { LoginPage } from '@/routes/login';
 import { RegisterPage } from '@/routes/register';
+import { SetupPage } from '@/routes/setup';
 import { DashboardPage } from '@/routes/dashboard';
 import { ProvidersPage } from '@/routes/gateway/providers';
 import { ModelsPage } from '@/routes/gateway/models';
@@ -27,9 +28,32 @@ import { SettingsPage } from '@/routes/admin/settings';
 import { LogForwardersPage } from '@/routes/admin/log-forwarders';
 import { ProfilePage } from '@/routes/profile';
 
+const API_BASE = import.meta.env.VITE_API_BASE ?? '';
+
+let cachedSetupStatus: { initialized: boolean; needs_setup: boolean } | null = null;
+
 function RootComponent() {
   const { t } = useTranslation();
   const { user, loading, login, logout, handleSsoCallback } = useAuth();
+  const [setupChecked, setSetupChecked] = useState(cachedSetupStatus !== null);
+  const [needsSetup, setNeedsSetup] = useState(cachedSetupStatus?.needs_setup ?? false);
+
+  // Check setup status on mount
+  useEffect(() => {
+    if (cachedSetupStatus !== null) return;
+    fetch(`${API_BASE}/api/setup/status`)
+      .then((r) => r.json())
+      .then((data: { initialized: boolean; needs_setup: boolean }) => {
+        cachedSetupStatus = data;
+        setNeedsSetup(data.needs_setup);
+        setSetupChecked(true);
+      })
+      .catch(() => {
+        // If the endpoint fails, assume setup is done
+        cachedSetupStatus = { initialized: true, needs_setup: false };
+        setSetupChecked(true);
+      });
+  }, []);
 
   // Handle SSO callback: tokens in URL fragment
   useEffect(() => {
@@ -46,12 +70,31 @@ function RootComponent() {
     }
   }, [handleSsoCallback]);
 
-  if (loading) {
+  if (!setupChecked || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-muted-foreground">{t('common.loading')}</div>
       </div>
     );
+  }
+
+  const isSetupPath = window.location.pathname === '/setup';
+
+  // Redirect to /setup if needs setup and not already there
+  if (needsSetup && !isSetupPath) {
+    window.location.href = '/setup';
+    return null;
+  }
+
+  // Redirect away from /setup if already initialized
+  if (!needsSetup && isSetupPath) {
+    window.location.href = '/';
+    return null;
+  }
+
+  // Show setup page directly (no AppShell)
+  if (isSetupPath && needsSetup) {
+    return <SetupPage />;
   }
 
   if (!user) {
@@ -185,6 +228,12 @@ const registerRoute = createRoute({
   },
 });
 
+const setupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/setup',
+  component: SetupPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   providersRoute,
@@ -203,6 +252,7 @@ const routeTree = rootRoute.addChildren([
   logForwardersRoute,
   profileRoute,
   registerRoute,
+  setupRoute,
 ]);
 
 export const router = createRouter({ routeTree });

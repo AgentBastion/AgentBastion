@@ -342,7 +342,206 @@ curl http://localhost:3000/health
 
 ---
 
+### GET /health/live
+
+存活探针。如果服务器进程正在运行，返回 200。
+
+**认证：** 公开
+
+#### 响应体
+
+```json
+{
+  "status": "alive"
+}
+```
+
+#### 示例
+
+```bash
+curl http://localhost:3000/health/live
+```
+
+---
+
+### GET /health/ready
+
+就绪探针。如果所有关键依赖（PostgreSQL、Redis）可达，返回 200。如果任何关键依赖不可用，返回 503。
+
+**认证：** 公开
+
+#### 响应体（健康）
+
+```json
+{
+  "status": "ready"
+}
+```
+
+#### 响应体（不健康）
+
+```json
+{
+  "status": "not_ready",
+  "reason": "redis unreachable"
+}
+```
+
+#### 示例
+
+```bash
+curl http://localhost:3000/health/ready
+```
+
+| 状态码 | 条件                                  |
+| ------ | --------------------------------------- |
+| 200    | 所有关键依赖健康                      |
+| 503    | PostgreSQL 或 Redis 不可达            |
+
+---
+
+### GET /metrics
+
+Prometheus 兼容的指标端点。暴露请求延迟直方图、Token 吞吐量计数器、活跃连接数仪表和错误率计数器。
+
+**认证：** 公开（无需认证）
+
+**端口：** 3000（网关）
+
+#### 响应
+
+```
+# HELP http_requests_total Total number of HTTP requests
+# TYPE http_requests_total counter
+http_requests_total{method="POST",endpoint="/v1/chat/completions",status="200"} 1520
+
+# HELP http_request_duration_seconds HTTP request latency
+# TYPE http_request_duration_seconds histogram
+http_request_duration_seconds_bucket{endpoint="/v1/chat/completions",le="0.5"} 300
+...
+```
+
+#### 示例
+
+```bash
+curl http://localhost:3000/metrics
+```
+
+> **注意：** 此端点用于 Prometheus 抓取。在生产环境中请通过网络策略限制访问。
+
+---
+
 ## Console 端点（端口 3001）
+
+### 初始化设置
+
+#### GET /api/setup/status
+
+检查系统是否已初始化（即是否已创建管理员用户）。
+
+**认证：** 公开
+
+#### 响应体
+
+```json
+{
+  "initialized": false,
+  "needs_setup": true
+}
+```
+
+| 字段           | 类型    | 描述                                     |
+| -------------- | ------- | ---------------------------------------- |
+| `initialized`  | boolean | 如果已创建管理员用户则为 `true`          |
+| `needs_setup`  | boolean | 如果应显示设置向导则为 `true`            |
+
+#### 示例
+
+```bash
+curl http://localhost:3001/api/setup/status
+```
+
+---
+
+#### POST /api/setup/initialize
+
+执行系统初始化设置：创建首个管理员用户并可选配置首个 AI 提供商。此端点仅在系统尚未初始化时可用。
+
+**认证：** 公开（仅在未初始化时）
+
+#### 请求体
+
+```json
+{
+  "admin": {
+    "email": "admin@example.com",
+    "display_name": "Admin",
+    "password": "your-secure-password"
+  },
+  "provider": {
+    "name": "openai-prod",
+    "display_name": "OpenAI Production",
+    "provider_type": "openai",
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "sk-..."
+  }
+}
+```
+
+| 字段                     | 类型   | 必填     | 描述                                            |
+| ------------------------ | ------ | -------- | ----------------------------------------------- |
+| `admin.email`            | string | 是       | 管理员邮箱地址                                  |
+| `admin.display_name`     | string | 是       | 管理员显示名称                                  |
+| `admin.password`         | string | 是       | 管理员密码（最少 8 个字符）                     |
+| `provider`               | object | 否       | 可选的首个提供商配置                            |
+| `provider.name`          | string | 是*      | 唯一标识符（* 如设置 provider 则必填）          |
+| `provider.display_name`  | string | 是*      | 人类可读的名称                                  |
+| `provider.provider_type` | string | 是*      | `openai`、`anthropic`、`azure`、`custom` 之一   |
+| `provider.base_url`      | string | 是*      | 提供商 API 基础 URL                             |
+| `provider.api_key`       | string | 是*      | 提供商 API 密钥                                 |
+
+#### 响应体
+
+```json
+{
+  "access_token": "eyJhbGciOi...",
+  "refresh_token": "eyJhbGciOi...",
+  "token_type": "Bearer",
+  "expires_in": 900,
+  "user": {
+    "id": "uuid",
+    "email": "admin@example.com",
+    "display_name": "Admin",
+    "role": "admin"
+  }
+}
+```
+
+#### 示例
+
+```bash
+curl -X POST http://localhost:3001/api/setup/initialize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "admin": {
+      "email": "admin@example.com",
+      "display_name": "Admin",
+      "password": "your-secure-password"
+    }
+  }'
+```
+
+#### 错误响应
+
+| 状态码 | 条件                                     |
+| ------ | ---------------------------------------- |
+| 400    | 系统已初始化                             |
+| 422    | 验证错误（弱密码、无效邮箱）             |
+| 429    | 超出速率限制（每分钟 5 次请求）          |
+
+> **安全：** 此端点限制为每分钟 5 次请求，并对数据库执行二次检查以防止竞态条件。
+
+---
 
 ### 认证
 
@@ -764,6 +963,160 @@ curl -X DELETE http://localhost:3001/api/keys/550e8400-e29b-41d4-a716-4466554400
 | ------ | ---------------------------------- |
 | 401    | JWT 无效                          |
 | 404    | 密钥未找到或不属于当前用户        |
+
+---
+
+#### PATCH /api/keys/{id}
+
+更新现有 API 密钥的设置。
+
+**认证：** JWT
+
+#### 路径参数
+
+| 参数      | 类型 | 描述        |
+| --------- | ---- | ----------- |
+| `id`      | UUID | 密钥 ID     |
+
+#### 请求体
+
+```json
+{
+  "allowed_models": ["gpt-4o", "claude-sonnet-4-20250514"],
+  "rate_limit_rpm": 120,
+  "expires_in_days": 60,
+  "rotation_interval_days": 90,
+  "inactivity_timeout_days": 30
+}
+```
+
+| 字段                      | 类型            | 必填     | 描述                                        |
+| ------------------------- | --------------- | -------- | ------------------------------------------- |
+| `allowed_models`          | array\<string\> | 否       | 更新允许的模型列表                          |
+| `rate_limit_rpm`          | integer         | 否       | 更新每分钟请求数限制                        |
+| `expires_in_days`         | integer         | 否       | 设置或更新过期时间（从现在起的天数）        |
+| `rotation_interval_days`  | integer         | 否       | 设置自动轮换间隔                            |
+| `inactivity_timeout_days` | integer         | 否       | 不活跃 N 天后自动禁用密钥                   |
+
+#### 响应体
+
+```json
+{
+  "id": "uuid",
+  "name": "Production Key",
+  "prefix": "ab-prod",
+  "allowed_models": ["gpt-4o", "claude-sonnet-4-20250514"],
+  "rate_limit_rpm": 120,
+  "expires_at": "2026-08-01T00:00:00Z",
+  "rotation_interval_days": 90,
+  "inactivity_timeout_days": 30,
+  "updated_at": "2026-04-01T10:00:00Z"
+}
+```
+
+#### 示例
+
+```bash
+curl -X PATCH http://localhost:3001/api/keys/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer eyJhbGciOi..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rate_limit_rpm": 120,
+    "inactivity_timeout_days": 30
+  }'
+```
+
+#### 错误响应
+
+| 状态码 | 条件                              |
+| ------ | ---------------------------------- |
+| 401    | JWT 无效                          |
+| 404    | 密钥未找到或不属于当前用户        |
+| 422    | 验证错误                          |
+
+---
+
+#### POST /api/keys/{id}/rotate
+
+轮换 API 密钥。生成新的密钥值并返回。旧密钥进入宽限期（可配置），在此期间新旧密钥均被接受。
+
+**认证：** JWT
+
+#### 路径参数
+
+| 参数      | 类型 | 描述        |
+| --------- | ---- | ----------- |
+| `id`      | UUID | 密钥 ID     |
+
+#### 响应体
+
+```json
+{
+  "id": "uuid",
+  "name": "Production Key",
+  "key": "ab-sk-newkey123456...",
+  "grace_period_ends_at": "2026-04-02T10:00:00Z",
+  "rotated_at": "2026-04-01T10:00:00Z"
+}
+```
+
+> **重要：** 新的 `key` 值仅返回一次。旧密钥在 `grace_period_ends_at` 之前保持有效。
+
+#### 示例
+
+```bash
+curl -X POST http://localhost:3001/api/keys/550e8400-e29b-41d4-a716-446655440000/rotate \
+  -H "Authorization: Bearer eyJhbGciOi..."
+```
+
+#### 错误响应
+
+| 状态码 | 条件                              |
+| ------ | ---------------------------------- |
+| 401    | JWT 无效                          |
+| 404    | 密钥未找到或不属于当前用户        |
+
+---
+
+#### GET /api/keys/expiring
+
+列出指定天数内即将过期的 API 密钥。
+
+**认证：** JWT
+
+#### 查询参数
+
+| 参数      | 类型    | 必填     | 默认值  | 描述                             |
+| --------- | ------- | -------- | ------- | -------------------------------- |
+| `days`    | integer | 否       | 7       | 向前查看的天数                   |
+
+#### 响应体
+
+```json
+[
+  {
+    "id": "uuid",
+    "name": "Production Key",
+    "prefix": "ab-prod",
+    "expires_at": "2026-04-07T00:00:00Z",
+    "days_remaining": 5,
+    "owner_email": "user@example.com"
+  }
+]
+```
+
+#### 示例
+
+```bash
+curl "http://localhost:3001/api/keys/expiring?days=14" \
+  -H "Authorization: Bearer eyJhbGciOi..."
+```
+
+#### 错误响应
+
+| 状态码 | 条件        |
+| ------ | ----------- |
+| 401    | JWT 无效    |
 
 ---
 
@@ -1463,9 +1816,9 @@ curl "http://localhost:3001/api/audit/logs?q=provider.create&from=2026-03-01T00:
 
 ### 管理员设置
 
-#### GET /api/admin/settings/system
+#### GET /api/admin/settings
 
-获取系统级配置设置。
+获取按类别分组的所有设置。
 
 **认证：** JWT（管理员）
 
@@ -1473,62 +1826,136 @@ curl "http://localhost:3001/api/audit/logs?q=provider.create&from=2026-03-01T00:
 
 ```json
 {
-  "gateway_port": 3000,
-  "console_port": 3001,
-  "cors_origins": ["https://console.example.com"],
-  "registration_enabled": true,
-  "default_rate_limit_rpm": 60
+  "auth": {
+    "jwt_access_ttl_seconds": 900,
+    "jwt_refresh_ttl_seconds": 604800
+  },
+  "cache": {
+    "cache_ttl_seconds": 300
+  },
+  "security": {
+    "signature_drift_seconds": 300,
+    "nonce_ttl_seconds": 300,
+    "content_filter_patterns": [],
+    "pii_patterns": []
+  },
+  "budget": {
+    "budget_warning_threshold": 0.8,
+    "budget_critical_threshold": 0.95
+  },
+  "keys": {
+    "api_key_max_expiry_days": 365,
+    "api_key_default_rate_limit_rpm": 60
+  },
+  "general": {
+    "data_retention_days": 30,
+    "site_name": "AgentBastion"
+  }
 }
 ```
 
 #### 示例
 
 ```bash
-curl http://localhost:3001/api/admin/settings/system \
+curl http://localhost:3001/api/admin/settings \
   -H "Authorization: Bearer eyJhbGciOi..."
 ```
 
 ---
 
-#### GET /api/admin/settings/oidc
+#### PATCH /api/admin/settings
 
-获取 OIDC/SSO 配置（密钥已脱敏）。
+更新一个或多个设置。设置在持久化之前会进行验证。
 
 **认证：** JWT（管理员）
+
+#### 请求体
+
+```json
+{
+  "settings": {
+    "jwt_access_ttl_seconds": 1800,
+    "site_name": "My AI Gateway",
+    "data_retention_days": 60
+  }
+}
+```
+
+| 字段       | 类型   | 必填     | 描述                               |
+| ---------- | ------ | -------- | ---------------------------------- |
+| `settings` | object | 是       | 要更新的设置键值对                 |
 
 #### 响应体
 
 ```json
 {
-  "enabled": true,
-  "issuer_url": "https://login.microsoftonline.com/tenant-id/v2.0",
-  "client_id": "app-client-id",
-  "redirect_url": "https://console.example.com/api/auth/sso/callback",
-  "scopes": ["openid", "email", "profile"]
+  "updated": ["jwt_access_ttl_seconds", "site_name", "data_retention_days"],
+  "settings": {
+    "jwt_access_ttl_seconds": 1800,
+    "site_name": "My AI Gateway",
+    "data_retention_days": 60
+  }
 }
 ```
 
-> **注意：** 响应中不会暴露 `client_secret`。
+#### 示例
+
+```bash
+curl -X PATCH http://localhost:3001/api/admin/settings \
+  -H "Authorization: Bearer eyJhbGciOi..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "settings": {
+      "jwt_access_ttl_seconds": 1800,
+      "data_retention_days": 90
+    }
+  }'
+```
+
+#### 错误响应
+
+| 状态码 | 条件                              |
+| ------ | --------------------------------- |
+| 401    | JWT 无效                          |
+| 403    | 非管理员                          |
+| 422    | 验证错误（无效的键或值）          |
 
 ---
 
-#### GET /api/admin/settings/audit
+#### GET /api/admin/settings/category/{category}
 
-获取审计日志配置。
+获取特定类别的设置。
 
 **认证：** JWT（管理员）
 
+#### 路径参数
+
+| 参数       | 类型   | 描述                                                                           |
+| ---------- | ------ | ------------------------------------------------------------------------------ |
+| `category` | string | `auth`、`cache`、`security`、`budget`、`keys`、`general`、`system`、`oidc`、`audit` 之一 |
+
 #### 响应体
 
-```json
-{
-  "quickwit_enabled": true,
-  "quickwit_url": "http://quickwit:7280",
-  "quickwit_index": "agentbastion-audit",
-  "syslog_enabled": true,
-  "syslog_addr": "siem.corp.internal:514"
-}
+仅返回所请求类别的设置（与 `GET /api/admin/settings` 中对应部分的结构相同）。
+
+#### 示例
+
+```bash
+curl http://localhost:3001/api/admin/settings/category/auth \
+  -H "Authorization: Bearer eyJhbGciOi..."
 ```
+
+#### 错误响应
+
+| 状态码 | 条件               |
+| ------ | ------------------ |
+| 401    | JWT 无效           |
+| 403    | 非管理员           |
+| 404    | 未知类别           |
+
+---
+
+> **注意：** 旧版端点 `GET /api/admin/settings/system`、`GET /api/admin/settings/oidc` 和 `GET /api/admin/settings/audit` 仍然可用，作为 `GET /api/admin/settings/category/{category}` 对应类别的别名。
 
 ---
 
@@ -1536,15 +1963,21 @@ curl http://localhost:3001/api/admin/settings/system \
 
 #### GET /api/health
 
-详细的健康检查，报告与后端服务的连通性。
+详细的健康检查，报告与后端服务的连通性、延迟指标和连接池状态。
 
 **认证：** 公开
 
-#### 响应体
+#### 响应体（健康）
 
 ```json
 {
   "status": "ok",
+  "pg_latency_ms": 2.5,
+  "redis_latency_ms": 0.8,
+  "quickwit_latency_ms": 5.1,
+  "pool_idle": 8,
+  "pool_active": 2,
+  "uptime_seconds": 86400,
   "services": {
     "postgres": "ok",
     "redis": "ok",
@@ -1553,18 +1986,36 @@ curl http://localhost:3001/api/admin/settings/system \
 }
 ```
 
-如果某个依赖不可达：
+#### 响应体（降级）
+
+如果关键依赖（PostgreSQL 或 Redis）不可达，端点返回 HTTP 503：
 
 ```json
 {
   "status": "degraded",
+  "pg_latency_ms": null,
+  "redis_latency_ms": 0.8,
+  "quickwit_latency_ms": 5.1,
+  "pool_idle": 0,
+  "pool_active": 0,
+  "uptime_seconds": 86400,
   "services": {
-    "postgres": "ok",
+    "postgres": "error",
     "redis": "ok",
-    "quickwit": "error"
+    "quickwit": "ok"
   }
 }
 ```
+
+| 字段                 | 类型    | 描述                                     |
+| -------------------- | ------- | ---------------------------------------- |
+| `status`             | string  | `ok` 或 `degraded`                       |
+| `pg_latency_ms`      | number  | PostgreSQL 延迟（不可达时为 null）       |
+| `redis_latency_ms`   | number  | Redis 延迟（不可达时为 null）            |
+| `quickwit_latency_ms`| number  | Quickwit 延迟（不可达时为 null）         |
+| `pool_idle`          | integer | 空闲数据库连接数                         |
+| `pool_active`        | integer | 活跃数据库连接数                         |
+| `uptime_seconds`     | integer | 服务器运行时间（秒）                     |
 
 #### 示例
 
@@ -1572,7 +2023,7 @@ curl http://localhost:3001/api/admin/settings/system \
 curl http://localhost:3001/api/health
 ```
 
-| 状态码 | 条件                                  |
+| 状态码 | 条件                                    |
 | ------ | --------------------------------------- |
-| 200    | 所有服务健康                          |
-| 503    | 一个或多个后端服务不可达              |
+| 200    | 所有服务健康                            |
+| 503    | 关键依赖（PG 或 Redis）不可用          |

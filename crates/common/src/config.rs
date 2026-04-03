@@ -65,10 +65,29 @@ impl AppConfig {
         })
     }
 
-    pub fn validate(&self) {
+    pub fn validate(&self) -> Result<(), String> {
         if self.encryption_key.len() != 64 {
-            panic!("ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)");
+            return Err("ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)".into());
         }
+        if hex::decode(&self.encryption_key).is_err() {
+            return Err("ENCRYPTION_KEY must be valid hex characters".into());
+        }
+
+        // JWT secret entropy check
+        if self.jwt_secret.len() < 32 {
+            return Err("JWT_SECRET must be at least 32 characters (256 bits)".into());
+        }
+        if self
+            .jwt_secret
+            .chars()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            <= 1
+        {
+            return Err("JWT_SECRET must not consist of a single repeated character".into());
+        }
+
+        Ok(())
     }
 
     pub fn gateway_addr(&self) -> String {
@@ -77,6 +96,26 @@ impl AppConfig {
 
     pub fn console_addr(&self) -> String {
         format!("{}:{}", self.server_host, self.console_port)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_config(jwt_secret: &str, encryption_key: &str) -> Self {
+        Self {
+            database_url: "postgres://test".into(),
+            redis_url: "redis://test".into(),
+            jwt_secret: jwt_secret.into(),
+            encryption_key: encryption_key.into(),
+            server_host: "0.0.0.0".into(),
+            gateway_port: 3000,
+            console_port: 3001,
+            cors_origins: vec!["http://localhost".into()],
+            quickwit_url: None,
+            quickwit_index: "test".into(),
+            oidc_issuer_url: None,
+            oidc_client_id: None,
+            oidc_client_secret: None,
+            oidc_redirect_url: None,
+        }
     }
 
     pub fn audit_config(&self) -> crate::audit::AuditConfig {
@@ -90,5 +129,71 @@ impl AppConfig {
         self.oidc_issuer_url.is_some()
             && self.oidc_client_id.is_some()
             && self.oidc_client_secret.is_some()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_config(jwt_secret: &str, encryption_key: &str) -> AppConfig {
+        AppConfig::test_config(jwt_secret, encryption_key)
+    }
+
+    #[test]
+    fn validate_rejects_short_encryption_key() {
+        // 32 hex chars instead of the required 64
+        let cfg = make_config(
+            "a]b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+            "aabbccdd11223344aabbccdd11223344",
+        );
+        let result = cfg.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("64 hex characters"));
+    }
+
+    #[test]
+    fn validate_rejects_short_jwt_secret() {
+        // 16-char JWT secret, needs 32
+        let cfg = make_config(
+            "short_jwt_secret",
+            "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd11223344",
+        );
+        let result = cfg.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("at least 32 characters"));
+    }
+
+    #[test]
+    fn validate_rejects_single_char_jwt_secret() {
+        // 34 chars but all 'a' — single repeated character
+        let cfg = make_config(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd11223344",
+        );
+        let result = cfg.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("single repeated character"));
+    }
+
+    #[test]
+    fn validate_accepts_valid_config() {
+        let cfg = make_config(
+            "a_valid_jwt_secret_with_enough_entropy!",
+            "aabbccdd11223344aabbccdd11223344aabbccdd11223344aabbccdd11223344",
+        );
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_non_hex_encryption_key() {
+        // 64 chars but contains non-hex characters (g, z, etc.)
+        let cfg = make_config(
+            "a_valid_jwt_secret_with_enough_entropy!",
+            "zzzzzzzz11223344aabbccdd11223344aabbccdd11223344aabbccdd11223344",
+        );
+        let result = cfg.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("valid hex"));
     }
 }

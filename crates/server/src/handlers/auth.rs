@@ -91,12 +91,17 @@ pub async fn login(
     .fetch_all(&state.db)
     .await?;
 
-    let access_token = state
-        .jwt
-        .create_access_token(user.id, &user.email, roles.clone())?;
-    let refresh_token = state
-        .jwt
-        .create_refresh_token(user.id, &user.email, roles)?;
+    let access_ttl = state.dynamic_config.jwt_access_ttl_secs().await;
+    let refresh_ttl_days = state.dynamic_config.jwt_refresh_ttl_days().await;
+
+    let access_token =
+        state
+            .jwt
+            .create_access_token_with_ttl(user.id, &user.email, roles.clone(), access_ttl)?;
+    let refresh_token =
+        state
+            .jwt
+            .create_refresh_token_with_ttl(user.id, &user.email, roles, refresh_ttl_days)?;
 
     let signing_key = verify_signature::create_signing_key(&state.redis, &user.id)
         .await
@@ -112,7 +117,7 @@ pub async fn login(
         access_token,
         refresh_token,
         token_type: "Bearer".into(),
-        expires_in: 900,
+        expires_in: access_ttl,
         signing_key,
     }))
 }
@@ -185,13 +190,21 @@ pub async fn refresh(
         return Err(AppError::BadRequest("Invalid token type".into()));
     }
 
-    let access_token =
-        state
-            .jwt
-            .create_access_token(claims.sub, &claims.email, claims.roles.clone())?;
-    let refresh_token = state
-        .jwt
-        .create_refresh_token(claims.sub, &claims.email, claims.roles)?;
+    let access_ttl = state.dynamic_config.jwt_access_ttl_secs().await;
+    let refresh_ttl_days = state.dynamic_config.jwt_refresh_ttl_days().await;
+
+    let access_token = state.jwt.create_access_token_with_ttl(
+        claims.sub,
+        &claims.email,
+        claims.roles.clone(),
+        access_ttl,
+    )?;
+    let refresh_token = state.jwt.create_refresh_token_with_ttl(
+        claims.sub,
+        &claims.email,
+        claims.roles,
+        refresh_ttl_days,
+    )?;
 
     let signing_key = verify_signature::create_signing_key(&state.redis, &claims.sub)
         .await
@@ -201,7 +214,7 @@ pub async fn refresh(
         access_token,
         refresh_token,
         token_type: "Bearer".into(),
-        expires_in: 900,
+        expires_in: access_ttl,
         signing_key,
     }))
 }
@@ -210,11 +223,13 @@ pub async fn me(
     auth_user: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<UserResponse>, AppError> {
-    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
-        .bind(auth_user.claims.sub)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or(AppError::NotFound("User not found".into()))?;
+    let user = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE id = $1 AND is_active = true AND deleted_at IS NULL",
+    )
+    .bind(auth_user.claims.sub)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound("User not found".into()))?;
 
     Ok(Json(UserResponse {
         id: user.id,
@@ -236,11 +251,13 @@ pub async fn change_password(
         ));
     }
 
-    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
-        .bind(auth_user.claims.sub)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or(AppError::NotFound("User not found".into()))?;
+    let user = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE id = $1 AND is_active = true AND deleted_at IS NULL",
+    )
+    .bind(auth_user.claims.sub)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound("User not found".into()))?;
 
     let current_hash = user
         .password_hash
@@ -278,22 +295,22 @@ pub async fn delete_account(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let user_id = auth_user.claims.sub;
 
-    sqlx::query("DELETE FROM api_keys WHERE user_id = $1")
+    // Soft-delete: mark as deleted instead of hard-deleting
+    // Records are purged after 30 days by the data retention task
+    sqlx::query("UPDATE api_keys SET is_active = false, deleted_at = now(), disabled_reason = 'account_deleted' WHERE user_id = $1")
         .bind(user_id)
         .execute(&state.db)
         .await?;
-    sqlx::query("DELETE FROM user_roles WHERE user_id = $1")
+    sqlx::query("UPDATE users SET is_active = false, deleted_at = now() WHERE id = $1")
         .bind(user_id)
         .execute(&state.db)
         .await?;
-    sqlx::query("DELETE FROM team_members WHERE user_id = $1")
-        .bind(user_id)
-        .execute(&state.db)
-        .await?;
-    sqlx::query("DELETE FROM users WHERE id = $1")
-        .bind(user_id)
-        .execute(&state.db)
-        .await?;
+
+    // Revoke all sessions
+    let _: () =
+        fred::interfaces::KeysInterface::del(&state.redis, &format!("signing_key:{user_id}"))
+            .await
+            .unwrap_or(());
 
     state
         .audit

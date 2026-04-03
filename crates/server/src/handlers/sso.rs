@@ -131,12 +131,17 @@ pub async fn sso_callback(
     .fetch_all(&state.db)
     .await?;
 
-    let access_token = state
-        .jwt
-        .create_access_token(user.id, &user.email, roles.clone())?;
-    let refresh_token = state
-        .jwt
-        .create_refresh_token(user.id, &user.email, roles)?;
+    let access_ttl = state.dynamic_config.jwt_access_ttl_secs().await;
+    let refresh_ttl_days = state.dynamic_config.jwt_refresh_ttl_days().await;
+
+    let access_token =
+        state
+            .jwt
+            .create_access_token_with_ttl(user.id, &user.email, roles.clone(), access_ttl)?;
+    let refresh_token =
+        state
+            .jwt
+            .create_refresh_token_with_ttl(user.id, &user.email, roles, refresh_ttl_days)?;
 
     // Audit log
     state.audit.log(

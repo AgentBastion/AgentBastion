@@ -12,11 +12,6 @@ const HEADER_TIMESTAMP: &str = "x-signature-timestamp";
 const HEADER_NONCE: &str = "x-signature-nonce";
 const HEADER_SIGNATURE: &str = "x-signature";
 
-/// Maximum clock skew allowed (seconds).
-const MAX_TIMESTAMP_DRIFT: i64 = 300;
-/// Nonce TTL in Redis (seconds). Must be >= MAX_TIMESTAMP_DRIFT * 2.
-const NONCE_TTL_SECS: i64 = 600;
-
 /// Generate a random 32-byte signing key and store it in Redis keyed by user_id.
 /// Returns the hex-encoded key.
 pub async fn create_signing_key(
@@ -93,9 +88,12 @@ pub async fn verify_signature(
         .ok_or(StatusCode::BAD_REQUEST)?;
 
     // Parse timestamp and check drift
+    let max_drift = state.dynamic_config.signature_drift_secs().await;
+    let nonce_ttl = state.dynamic_config.signature_nonce_ttl_secs().await;
+
     let timestamp: i64 = timestamp_str.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
     let now = chrono::Utc::now().timestamp();
-    if (now - timestamp).abs() > MAX_TIMESTAMP_DRIFT {
+    if (now - timestamp).abs() > max_drift {
         tracing::warn!("Signature timestamp drift too large: {timestamp} vs {now}");
         return Err(StatusCode::UNAUTHORIZED);
     }
@@ -106,7 +104,7 @@ pub async fn verify_signature(
         &state.redis,
         &nonce_key,
         "1",
-        Some(fred::types::Expiration::EX(NONCE_TTL_SECS)),
+        Some(fred::types::Expiration::EX(nonce_ttl)),
         Some(fred::types::SetOptions::NX), // Only set if not exists
         false,
     )

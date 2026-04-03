@@ -1,9 +1,11 @@
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Path, State};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use agent_bastion_auth::password;
 use agent_bastion_common::dto::UserResponse;
+use agent_bastion_common::dynamic_config::{self, SettingEntry};
 use agent_bastion_common::errors::AppError;
 use agent_bastion_common::models::User;
 
@@ -16,9 +18,11 @@ pub async fn list_users(
     _auth_user: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<UserResponse>>, AppError> {
-    let users = sqlx::query_as::<_, User>("SELECT * FROM users ORDER BY created_at DESC")
-        .fetch_all(&state.db)
-        .await?;
+    let users = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC",
+    )
+    .fetch_all(&state.db)
+    .await?;
 
     let responses: Vec<UserResponse> = users
         .into_iter()
@@ -210,4 +214,324 @@ pub async fn get_audit_settings(
         quickwit_url: state.config.quickwit_url.clone(),
         quickwit_index: state.config.quickwit_index.clone(),
     })
+}
+
+// --- Dynamic settings CRUD ---
+
+/// GET /api/admin/settings — return all settings grouped by category.
+pub async fn get_all_settings(
+    _auth_user: AuthUser,
+    State(state): State<AppState>,
+) -> Result<Json<HashMap<String, Vec<SettingEntry>>>, AppError> {
+    let grouped = state.dynamic_config.get_all_grouped().await;
+    Ok(Json(grouped))
+}
+
+/// GET /api/admin/settings/{category} — return settings for a specific category.
+pub async fn get_settings_by_category(
+    _auth_user: AuthUser,
+    State(state): State<AppState>,
+    Path(category): Path<String>,
+) -> Result<Json<Vec<SettingEntry>>, AppError> {
+    let settings = state.dynamic_config.get_by_category(&category).await;
+    Ok(Json(settings))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateSettingsRequest {
+    pub settings: HashMap<String, serde_json::Value>,
+}
+
+/// PATCH /api/admin/settings — update one or more settings.
+pub async fn update_settings(
+    auth_user: AuthUser,
+    State(state): State<AppState>,
+    Json(req): Json<UpdateSettingsRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    // Validate each setting
+    for (key, value) in &req.settings {
+        validate_setting(key, value)?;
+    }
+
+    state
+        .dynamic_config
+        .update(&req.settings, Some(auth_user.claims.sub))
+        .await
+        .map_err(AppError::Internal)?;
+
+    // Notify other instances via Redis Pub/Sub
+    dynamic_config::notify_config_changed(&state.redis).await;
+
+    state.audit.log(
+        agent_bastion_common::audit::AuditEntry::new("settings.update")
+            .user_id(auth_user.claims.sub)
+            .resource("system_settings")
+            .detail(serde_json::json!({
+                "keys": req.settings.keys().collect::<Vec<_>>(),
+            })),
+    );
+
+    Ok(Json(
+        serde_json::json!({"status": "updated", "count": req.settings.len()}),
+    ))
+}
+
+/// Validate a setting value based on its key.
+fn validate_setting(key: &str, value: &serde_json::Value) -> Result<(), AppError> {
+    match key {
+        // Integer settings that must be > 0
+        "auth.jwt_access_ttl_secs"
+        | "auth.jwt_refresh_ttl_days"
+        | "gateway.cache_ttl_secs"
+        | "gateway.request_timeout_secs"
+        | "gateway.body_limit_bytes"
+        | "console.request_timeout_secs"
+        | "console.body_limit_bytes"
+        | "security.signature_nonce_ttl_secs"
+        | "security.signature_drift_secs"
+        | "audit.batch_size"
+        | "audit.flush_interval_secs"
+        | "audit.channel_capacity"
+        | "api_keys.rotation_grace_period_hours" => {
+            let v = value
+                .as_i64()
+                .ok_or_else(|| AppError::BadRequest(format!("{key} must be an integer")))?;
+            if v <= 0 {
+                return Err(AppError::BadRequest(format!("{key} must be > 0")));
+            }
+        }
+
+        // Integer settings that can be 0 (0 = disabled)
+        "api_keys.default_expiry_days"
+        | "api_keys.inactivity_timeout_days"
+        | "api_keys.rotation_period_days"
+        | "data.retention_days_usage"
+        | "data.retention_days_audit" => {
+            let v = value
+                .as_i64()
+                .ok_or_else(|| AppError::BadRequest(format!("{key} must be an integer")))?;
+            if v < 0 {
+                return Err(AppError::BadRequest(format!("{key} must be >= 0")));
+            }
+        }
+
+        // Budget thresholds: array of floats in 0.0..1.0
+        "budget.alert_thresholds" => {
+            let arr = value.as_array().ok_or_else(|| {
+                AppError::BadRequest("budget.alert_thresholds must be an array".into())
+            })?;
+            for item in arr {
+                let v = item.as_f64().ok_or_else(|| {
+                    AppError::BadRequest("Each threshold must be a number".into())
+                })?;
+                if !(0.0..=1.0).contains(&v) {
+                    return Err(AppError::BadRequest(
+                        "Each threshold must be between 0.0 and 1.0".into(),
+                    ));
+                }
+            }
+        }
+
+        // Budget webhook URL: null or string
+        "budget.webhook_url" => {
+            if !value.is_null() && !value.is_string() {
+                return Err(AppError::BadRequest(
+                    "budget.webhook_url must be a string or null".into(),
+                ));
+            }
+        }
+
+        // Boolean settings
+        "setup.initialized" => {
+            if !value.is_boolean() {
+                return Err(AppError::BadRequest(format!("{key} must be a boolean")));
+            }
+        }
+
+        // String settings
+        "setup.site_name" => {
+            let s = value
+                .as_str()
+                .ok_or_else(|| AppError::BadRequest(format!("{key} must be a string")))?;
+            if s.is_empty() || s.len() > 100 {
+                return Err(AppError::BadRequest(
+                    "Site name must be 1-100 characters".into(),
+                ));
+            }
+        }
+
+        // JSON array settings (patterns) — with size limits and regex validation
+        "security.content_filter_patterns" => {
+            let arr = value
+                .as_array()
+                .ok_or_else(|| AppError::BadRequest(format!("{key} must be a JSON array")))?;
+            if arr.len() > 500 {
+                return Err(AppError::BadRequest(
+                    "Content filter patterns: max 500 rules".into(),
+                ));
+            }
+            for (i, item) in arr.iter().enumerate() {
+                let pattern = item
+                    .get("pattern")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        AppError::BadRequest(format!("Pattern {i}: missing 'pattern' string"))
+                    })?;
+                if pattern.len() > 500 {
+                    return Err(AppError::BadRequest(format!(
+                        "Pattern {i}: max 500 characters"
+                    )));
+                }
+                let severity = item
+                    .get("severity")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        AppError::BadRequest(format!("Pattern {i}: missing 'severity' string"))
+                    })?;
+                if !["critical", "high", "medium", "low"].contains(&severity) {
+                    return Err(AppError::BadRequest(format!(
+                        "Pattern {i}: severity must be critical/high/medium/low"
+                    )));
+                }
+                if item.get("category").and_then(|v| v.as_str()).is_none() {
+                    return Err(AppError::BadRequest(format!(
+                        "Pattern {i}: missing 'category' string"
+                    )));
+                }
+            }
+        }
+
+        "security.pii_redactor_patterns" => {
+            let arr = value
+                .as_array()
+                .ok_or_else(|| AppError::BadRequest(format!("{key} must be a JSON array")))?;
+            if arr.len() > 100 {
+                return Err(AppError::BadRequest(
+                    "PII redactor patterns: max 100 rules".into(),
+                ));
+            }
+            for (i, item) in arr.iter().enumerate() {
+                let regex_str = item.get("regex").and_then(|v| v.as_str()).ok_or_else(|| {
+                    AppError::BadRequest(format!("PII pattern {i}: missing 'regex' string"))
+                })?;
+                if regex_str.len() > 1000 {
+                    return Err(AppError::BadRequest(format!(
+                        "PII pattern {i}: regex max 1000 characters"
+                    )));
+                }
+                // Validate regex compiles (prevents ReDoS storage of invalid patterns)
+                if regex::Regex::new(regex_str).is_err() {
+                    return Err(AppError::BadRequest(format!(
+                        "PII pattern {i}: invalid regex syntax"
+                    )));
+                }
+                if item
+                    .get("placeholder_prefix")
+                    .and_then(|v| v.as_str())
+                    .is_none()
+                {
+                    return Err(AppError::BadRequest(format!(
+                        "PII pattern {i}: missing 'placeholder_prefix'"
+                    )));
+                }
+                if item.get("name").and_then(|v| v.as_str()).is_none() {
+                    return Err(AppError::BadRequest(format!(
+                        "PII pattern {i}: missing 'name'"
+                    )));
+                }
+            }
+        }
+
+        _ => {
+            return Err(AppError::BadRequest(format!("Unknown setting: {key}")));
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn validates_positive_integer_settings() {
+        assert!(validate_setting("auth.jwt_access_ttl_secs", &json!(900)).is_ok());
+        assert!(validate_setting("auth.jwt_access_ttl_secs", &json!(0)).is_err());
+        assert!(validate_setting("auth.jwt_access_ttl_secs", &json!(-1)).is_err());
+    }
+
+    #[test]
+    fn validates_zero_allowed_settings() {
+        assert!(validate_setting("api_keys.default_expiry_days", &json!(0)).is_ok());
+        assert!(validate_setting("api_keys.default_expiry_days", &json!(30)).is_ok());
+        assert!(validate_setting("api_keys.default_expiry_days", &json!(-1)).is_err());
+    }
+
+    #[test]
+    fn validates_budget_thresholds() {
+        assert!(validate_setting("budget.alert_thresholds", &json!([0.5, 0.8])).is_ok());
+        assert!(validate_setting("budget.alert_thresholds", &json!([1.5])).is_err());
+        assert!(validate_setting("budget.alert_thresholds", &json!("not array")).is_err());
+    }
+
+    #[test]
+    fn validates_webhook_url() {
+        assert!(validate_setting("budget.webhook_url", &json!(null)).is_ok());
+        assert!(validate_setting("budget.webhook_url", &json!("https://example.com/hook")).is_ok());
+        assert!(validate_setting("budget.webhook_url", &json!(42)).is_err());
+    }
+
+    #[test]
+    fn validates_site_name() {
+        assert!(validate_setting("setup.site_name", &json!("My Site")).is_ok());
+        assert!(validate_setting("setup.site_name", &json!("")).is_err());
+        let long_name = "x".repeat(101);
+        assert!(validate_setting("setup.site_name", &json!(long_name)).is_err());
+    }
+
+    #[test]
+    fn validates_content_filter_patterns() {
+        // Empty array is valid
+        assert!(validate_setting("security.content_filter_patterns", &json!([])).is_ok());
+        // Valid pattern with all required fields
+        assert!(
+            validate_setting(
+                "security.content_filter_patterns",
+                &json!([{"pattern": "test", "severity": "high", "category": "custom"}])
+            )
+            .is_ok()
+        );
+        // Missing severity → rejected
+        assert!(
+            validate_setting(
+                "security.content_filter_patterns",
+                &json!([{"pattern": "test"}])
+            )
+            .is_err()
+        );
+        // Not an array → rejected
+        assert!(validate_setting("security.content_filter_patterns", &json!("not array")).is_err());
+        // Invalid severity value → rejected
+        assert!(
+            validate_setting(
+                "security.content_filter_patterns",
+                &json!([{"pattern": "test", "severity": "invalid", "category": "x"}])
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_settings() {
+        assert!(validate_setting("unknown.key", &json!("anything")).is_err());
+    }
+
+    #[test]
+    fn validates_boolean_settings() {
+        assert!(validate_setting("setup.initialized", &json!(true)).is_ok());
+        assert!(validate_setting("setup.initialized", &json!(false)).is_ok());
+        assert!(validate_setting("setup.initialized", &json!("yes")).is_err());
+    }
 }

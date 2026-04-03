@@ -16,6 +16,7 @@ pub struct Provider {
     pub is_active: bool,
     pub config_json: serde_json::Value,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

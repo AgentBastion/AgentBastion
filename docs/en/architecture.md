@@ -45,7 +45,9 @@ This architecture provides centralized:
                     |  | MCP Proxy |  |    |  | React 19     |   |
                     |  +-----------+  |    |  +--------------+   |
                     |  +-----------+  |    +---------------------+
-                    |  | /health   |  |
+                    |  +-----------+  |
+                    |  | /health/* |  |
+                    |  | /metrics  |  |
                     |  +-----------+  |
                     +---------+-------+
                               |
@@ -55,6 +57,7 @@ This architecture provides centralized:
     | PostgreSQL  |    |    Redis    |    |   Quickwit    |
     | users, keys |    | rate limits |    | audit search  |
     | providers   |    | sessions    |    |               |
+    | settings    |    | config sync |    |               |
     | usage, RBAC |    | OIDC state  |    +-------+-------+
     +-------------+    +-------------+            |
                                            +------+------+
@@ -89,7 +92,7 @@ AgentBastion binds two separate TCP listeners on a single process:
 
 | Port | Name    | Purpose                                   | Audience           |
 |------|---------|-------------------------------------------|--------------------|
-| 3000 | Gateway | AI API proxy (`/v1/*`), MCP proxy (`/mcp`), health check (`/health`) | AI clients, agents |
+| 3000 | Gateway | AI API proxy (`/v1/*`), MCP proxy (`/mcp`), health checks (`/health/live`, `/health/ready`), Prometheus metrics (`/metrics`) | AI clients, agents, monitoring |
 | 3001 | Console | Management REST API (`/api/*`), Web UI    | Administrators     |
 
 ### Why Two Ports?
@@ -246,8 +249,11 @@ crates/
 
 The application entry point. Contains:
 
-- **`main.rs`** -- Initializes config, database, Redis, and starts both the gateway and console Axum servers.
+- **`main.rs`** -- Initializes config, database, Redis, runs startup validation (dependency checks, JWT secret entropy), and starts both the gateway and console Axum servers.
 - **`app.rs`** -- Builds the Axum router trees for both ports.
+- **`background_tasks/`** -- Periodic background jobs:
+  - `api_key_lifecycle.rs` -- Runs hourly to enforce key rotation periods, inactivity timeouts, and expiry policies.
+  - `data_retention.rs` -- Runs daily to purge expired usage records, audit logs, and soft-deleted records past the 30-day retention window.
 - **`handlers/`** -- Request handlers organized by domain:
   - `auth.rs`, `sso.rs` -- Login, registration, OIDC callbacks
   - `api_keys.rs` -- CRUD for virtual API keys
@@ -255,7 +261,10 @@ The application entry point. Contains:
   - `mcp_servers.rs`, `mcp_tools.rs` -- MCP server registry management
   - `analytics.rs`, `audit.rs` -- Usage dashboards, audit log queries
   - `admin.rs` -- User management, role assignment, system settings
-  - `health.rs` -- Health check endpoints
+  - `settings.rs` -- Dynamic configuration CRUD (`GET/PATCH /api/admin/settings`, category filtering)
+  - `setup.rs` -- First-run setup wizard (`GET /api/setup/status`, `POST /api/setup/initialize`)
+  - `health.rs` -- Health check endpoints (`/health/live`, `/health/ready`, `/api/health`)
+  - `metrics.rs` -- Prometheus metrics endpoint (`GET /metrics`)
 - **`middleware/`** -- Axum middleware layers:
   - `api_key_auth.rs` -- Extracts and validates `ab-` API keys for gateway routes
   - `auth_guard.rs` -- Validates JWT tokens for console routes
@@ -278,6 +287,8 @@ The AI API proxy engine. Contains:
 - **`rate_limiter.rs`** -- Redis-backed RPM/TPM rate limiting with sliding window counters.
 - **`token_counter.rs`** -- Token counting using `tiktoken-rs` for usage tracking and TPM enforcement.
 - **`cost_tracker.rs`** -- Real-time cost calculation based on model pricing from the database.
+- **`circuit_breaker.rs`** -- Three-state circuit breaker (Closed/Open/HalfOpen) per provider, with configurable `failure_threshold` and `recovery_secs`.
+- **`retry.rs`** -- Retry with exponential backoff for transient failures (NetworkError, UpstreamRateLimited), with configurable `max_retries`, `initial_delay_ms`, `max_delay_ms`, and `jitter`.
 
 ### mcp-gateway
 
@@ -307,6 +318,7 @@ Authentication and authorization library. Contains:
 Shared infrastructure used by all other crates. Contains:
 
 - **`config.rs`** -- `AppConfig` struct loaded from environment variables.
+- **`dynamic_config.rs`** -- `DynamicConfig` system that loads settings from the `system_settings` database table. Supports multi-instance sync via Redis Pub/Sub and in-memory caching. Covers JWT TTLs, cache TTL, content filter patterns, PII patterns, budget thresholds, API key policies, and data retention settings.
 - **`db.rs`** -- PostgreSQL connection pool setup using `sqlx`.
 - **`models/`** -- Database model structs (one per domain entity): `user.rs`, `team.rs`, `api_key.rs`, `provider.rs`, `mcp_server.rs`, `usage.rs`, `audit_log.rs`.
 - **`dto/`** -- Data transfer objects for API request/response serialization.
@@ -318,7 +330,7 @@ Shared infrastructure used by all other crates. Contains:
 
 ## 7. Database Schema Overview
 
-The database schema is defined across seven migration files applied in order on startup:
+The database schema is defined across twelve migration files applied in order on startup:
 
 ### 001_init_users -- User Accounts
 
@@ -372,6 +384,22 @@ The database schema is defined across seven migration files applied in order on 
 | `audit_logs`    | Security audit trail: user, API key, action, resource, detail JSON, IP address, and user agent. |
 | `budget_alerts` | Records of budget threshold notifications for teams and API keys. |
 
+### 008--012 -- Additional Migrations
+
+The remaining migrations add:
+
+| Table / Change | Purpose |
+|----------------|---------|
+| `system_settings` | Dynamic configuration key-value store with category, description, and type metadata. Queried by the `DynamicConfig` system and editable via the Admin Settings UI. |
+| `api_keys.rotation_period_days` | Per-key automatic rotation interval. |
+| `api_keys.inactivity_timeout_days` | Auto-disable key after N days of inactivity. |
+| `api_keys.last_used_at` | Timestamp of last key usage, used by the inactivity timeout policy. |
+| `api_keys.grace_period_expires_at` | Allows the old key to remain valid during rotation until the grace period expires. |
+| `users.deleted_at` | Soft-delete column for user accounts. |
+| `providers.deleted_at` | Soft-delete column for provider records. |
+| `api_keys.deleted_at` | Soft-delete column for API keys. |
+| New indexes | Performance indexes on hot query paths (usage records by time range, audit logs by user, API keys by team). |
+
 ---
 
 ## 8. Frontend Architecture
@@ -387,10 +415,11 @@ The web console is a single-page application located in the `web/` directory.
 
 ### Page Structure
 
-The UI consists of 15 pages organized into five groups:
+The UI consists of approximately 20 pages organized into six groups:
 
 | Group       | Pages                             | Description |
 |-------------|-----------------------------------|-------------|
+| Setup       | `setup.tsx`                       | First-run setup wizard (super_admin creation, site config, optional provider setup) |
 | Auth        | `login.tsx`                       | Login form (local + OIDC SSO) |
 | Dashboard   | `dashboard.tsx`                   | Overview: usage charts, cost summary, recent activity |
 | Gateway     | `providers.tsx`, `models.tsx`, `api-keys.tsx`, `logs.tsx` | AI provider management, model registry, API key CRUD, request logs |

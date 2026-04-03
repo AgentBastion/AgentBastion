@@ -45,7 +45,9 @@ AgentBastion 是一个使用 Rust 构建的企业级 AI API 网关和 MCP（Mode
                     |  | MCP Proxy |  |    |  | React 19     |   |
                     |  +-----------+  |    |  +--------------+   |
                     |  +-----------+  |    +---------------------+
-                    |  | /health   |  |
+                    |  +-----------+  |
+                    |  | /health/* |  |
+                    |  | /metrics  |  |
                     |  +-----------+  |
                     +---------+-------+
                               |
@@ -55,6 +57,7 @@ AgentBastion 是一个使用 Rust 构建的企业级 AI API 网关和 MCP（Mode
     | PostgreSQL  |    |    Redis    |    |   Quickwit    |
     | users, keys |    | rate limits |    | audit search  |
     | providers   |    | sessions    |    |               |
+    | settings    |    | config sync |    |               |
     | usage, RBAC |    | OIDC state  |    +-------+-------+
     +-------------+    +-------------+            |
                                            +------+------+
@@ -89,7 +92,7 @@ AgentBastion 在单个进程中绑定两个独立的 TCP 监听器：
 
 | 端口 | 名称    | 用途                                      | 目标用户           |
 |------|---------|-------------------------------------------|--------------------|
-| 3000 | Gateway | AI API 代理 (`/v1/*`)、MCP 代理 (`/mcp`)、健康检查 (`/health`) | AI 客户端、代理    |
+| 3000 | Gateway | AI API 代理 (`/v1/*`)、MCP 代理 (`/mcp`)、健康检查 (`/health/live`、`/health/ready`)、Prometheus 指标 (`/metrics`) | AI 客户端、代理、监控 |
 | 3001 | Console | 管理 REST API (`/api/*`)、Web UI          | 管理员             |
 
 ### 为什么使用两个端口？
@@ -246,8 +249,11 @@ crates/
 
 应用程序入口点。包含：
 
-- **`main.rs`** —— 初始化配置、数据库、Redis，并启动网关和控制台两个 Axum 服务器。
+- **`main.rs`** —— 初始化配置、数据库、Redis，运行启动验证（依赖检查、JWT Secret 熵值），并启动网关和控制台两个 Axum 服务器。
 - **`app.rs`** —— 为两个端口构建 Axum 路由树。
+- **`background_tasks/`** —— 定期后台任务：
+  - `api_key_lifecycle.rs` —— 每小时运行，执行密钥轮换周期、闲置超时和到期策略。
+  - `data_retention.rs` —— 每日运行，清理过期的使用记录、审计日志以及超过 30 天保留窗口的软删除记录。
 - **`handlers/`** —— 按领域组织的请求处理器：
   - `auth.rs`、`sso.rs` —— 登录、注册、OIDC 回调
   - `api_keys.rs` —— 虚拟 API 密钥的 CRUD 操作
@@ -255,7 +261,10 @@ crates/
   - `mcp_servers.rs`、`mcp_tools.rs` —— MCP 服务器注册管理
   - `analytics.rs`、`audit.rs` —— 用量仪表盘、审计日志查询
   - `admin.rs` —— 用户管理、角色分配、系统设置
-  - `health.rs` —— 健康检查端点
+  - `settings.rs` —— 动态配置 CRUD（`GET/PATCH /api/admin/settings`，按分类过滤）
+  - `setup.rs` —— 首次运行设置向导（`GET /api/setup/status`、`POST /api/setup/initialize`）
+  - `health.rs` —— 健康检查端点（`/health/live`、`/health/ready`、`/api/health`）
+  - `metrics.rs` —— Prometheus 指标端点（`GET /metrics`）
 - **`middleware/`** —— Axum 中间件层：
   - `api_key_auth.rs` —— 为网关路由提取和验证 `ab-` API 密钥
   - `auth_guard.rs` —— 为控制台路由验证 JWT 令牌
@@ -278,6 +287,8 @@ AI API 代理引擎。包含：
 - **`rate_limiter.rs`** —— 基于 Redis 的 RPM/TPM 速率限制，使用滑动窗口计数器。
 - **`token_counter.rs`** —— 使用 `tiktoken-rs` 进行 Token 计数，用于用量跟踪和 TPM 限制。
 - **`cost_tracker.rs`** —— 基于数据库中模型定价的实时成本计算。
+- **`circuit_breaker.rs`** —— 按 Provider 的三态断路器（Closed/Open/HalfOpen），可配置 `failure_threshold` 和 `recovery_secs`。
+- **`retry.rs`** —— 针对瞬态故障（NetworkError、UpstreamRateLimited）的指数退避重试，可配置 `max_retries`、`initial_delay_ms`、`max_delay_ms` 和 `jitter`。
 
 ### mcp-gateway
 
@@ -307,6 +318,7 @@ MCP 代理引擎。包含：
 所有其他 crate 使用的共享基础设施。包含：
 
 - **`config.rs`** —— 从环境变量加载的 `AppConfig` 结构体。
+- **`dynamic_config.rs`** —— `DynamicConfig` 系统，从 `system_settings` 数据库表加载配置。支持通过 Redis Pub/Sub 的多实例同步和内存缓存。涵盖 JWT TTL、缓存 TTL、内容过滤规则、PII 模式、预算阈值、API Key 策略和数据保留设置。
 - **`db.rs`** —— 使用 `sqlx` 设置 PostgreSQL 连接池。
 - **`models/`** —— 数据库模型结构体（每个领域实体一个）：`user.rs`、`team.rs`、`api_key.rs`、`provider.rs`、`mcp_server.rs`、`usage.rs`、`audit_log.rs`。
 - **`dto/`** —— 用于 API 请求/响应序列化的数据传输对象。
@@ -318,7 +330,7 @@ MCP 代理引擎。包含：
 
 ## 7. 数据库 Schema 概述
 
-数据库 Schema 由七个迁移文件定义，在启动时按顺序应用：
+数据库 Schema 由十二个迁移文件定义，在启动时按顺序应用：
 
 ### 001_init_users —— 用户账户
 
@@ -372,6 +384,22 @@ MCP 代理引擎。包含：
 | `audit_logs`    | 安全审计跟踪：用户、API 密钥、操作、资源、详情 JSON、IP 地址和用户代理。|
 | `budget_alerts` | 团队和 API 密钥的预算阈值通知记录。|
 
+### 008--012 —— 附加迁移
+
+后续迁移文件新增：
+
+| 表 / 变更 | 用途 |
+|-----------|------|
+| `system_settings` | 动态配置的键值存储，包含分类、描述和类型元数据。由 `DynamicConfig` 系统查询，可通过管理设置 UI 编辑。|
+| `api_keys.rotation_period_days` | 按密钥的自动轮换间隔。|
+| `api_keys.inactivity_timeout_days` | 闲置 N 天后自动禁用密钥。|
+| `api_keys.last_used_at` | 最近一次使用时间戳，用于闲置超时策略。|
+| `api_keys.grace_period_expires_at` | 轮换期间允许旧密钥在宽限期到期前保持有效。|
+| `users.deleted_at` | 用户账户的软删除列。|
+| `providers.deleted_at` | Provider 记录的软删除列。|
+| `api_keys.deleted_at` | API 密钥的软删除列。|
+| 新索引 | 热查询路径的性能索引（按时间范围的使用记录、按用户的审计日志、按团队的 API 密钥）。|
+
 ---
 
 ## 8. 前端架构
@@ -387,10 +415,11 @@ Web 控制台是一个位于 `web/` 目录下的单页应用。
 
 ### 页面结构
 
-UI 由 15 个页面组成，分为五组：
+UI 由约 20 个页面组成，分为六组：
 
 | 分组        | 页面                              | 描述 |
 |-------------|-----------------------------------|------|
+| 设置向导    | `setup.tsx`                       | 首次运行设置向导（超级管理员创建、站点配置、可选 Provider 设置） |
 | 认证        | `login.tsx`                       | 登录表单（本地 + OIDC SSO） |
 | 仪表盘      | `dashboard.tsx`                   | 概览：用量图表、成本摘要、近期活动 |
 | 网关        | `providers.tsx`、`models.tsx`、`api-keys.tsx`、`logs.tsx` | AI 提供商管理、模型注册、API 密钥 CRUD、请求日志 |

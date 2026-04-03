@@ -2,6 +2,14 @@ use crate::providers::traits::{ChatCompletionResponse, ChatMessage};
 use regex::Regex;
 use std::collections::HashMap;
 
+/// Serializable PII pattern for storage in system_settings.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct PiiPatternConfig {
+    pub name: String,
+    pub regex: String,
+    pub placeholder_prefix: String,
+}
+
 /// Detects and replaces PII in user messages before sending to upstream LLMs,
 /// then restores original values in the response.
 #[derive(Clone)]
@@ -12,9 +20,9 @@ pub struct PiiRedactor {
 #[derive(Clone)]
 struct PiiPattern {
     #[allow(dead_code)]
-    name: &'static str,
+    name: String,
     regex: Regex,
-    placeholder_prefix: &'static str,
+    placeholder_prefix: String,
 }
 
 /// Holds the mapping from placeholders back to original PII values.
@@ -30,39 +38,58 @@ impl Default for PiiRedactor {
 }
 
 impl PiiRedactor {
+    /// Create a PII redactor from a list of pattern configs (from DynamicConfig).
+    pub fn from_config(configs: &[PiiPatternConfig]) -> Self {
+        let patterns = configs
+            .iter()
+            .filter_map(|c| match Regex::new(&c.regex) {
+                Ok(regex) => Some(PiiPattern {
+                    name: c.name.clone(),
+                    regex,
+                    placeholder_prefix: c.placeholder_prefix.clone(),
+                }),
+                Err(e) => {
+                    tracing::warn!("Invalid PII regex pattern '{}': {e}", c.name);
+                    None
+                }
+            })
+            .collect();
+        Self { patterns }
+    }
+
     pub fn new() -> Self {
         // Order matters: longer/more specific patterns must come before shorter ones
         // to prevent partial matches (e.g. phone patterns matching inside credit cards).
         let patterns = vec![
             PiiPattern {
-                name: "email",
+                name: "email".into(),
                 regex: Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap(),
-                placeholder_prefix: "EMAIL",
+                placeholder_prefix: "EMAIL".into(),
             },
             PiiPattern {
-                name: "id_card_cn",
+                name: "id_card_cn".into(),
                 regex: Regex::new(r"\b\d{17}[\dXx]\b").unwrap(),
-                placeholder_prefix: "ID",
+                placeholder_prefix: "ID".into(),
             },
             PiiPattern {
-                name: "credit_card",
+                name: "credit_card".into(),
                 regex: Regex::new(r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b").unwrap(),
-                placeholder_prefix: "CARD",
+                placeholder_prefix: "CARD".into(),
             },
             PiiPattern {
-                name: "phone_cn",
+                name: "phone_cn".into(),
                 regex: Regex::new(r"1[3-9]\d{9}").unwrap(),
-                placeholder_prefix: "PHONE",
+                placeholder_prefix: "PHONE".into(),
             },
             PiiPattern {
-                name: "phone_us",
+                name: "phone_us".into(),
                 regex: Regex::new(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b").unwrap(),
-                placeholder_prefix: "PHONE",
+                placeholder_prefix: "PHONE".into(),
             },
             PiiPattern {
-                name: "ipv4",
+                name: "ipv4".into(),
                 regex: Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b").unwrap(),
-                placeholder_prefix: "IP",
+                placeholder_prefix: "IP".into(),
             },
         ];
 
@@ -78,7 +105,7 @@ impl PiiRedactor {
         &self,
         messages: &[ChatMessage],
     ) -> (Vec<ChatMessage>, RedactionContext) {
-        let mut counters: HashMap<&str, u32> = HashMap::new();
+        let mut counters: HashMap<String, u32> = HashMap::new();
         let mut replacements: HashMap<String, String> = HashMap::new();
 
         let redacted = messages
@@ -104,7 +131,9 @@ impl PiiRedactor {
                         .collect();
 
                     for matched_value in matches {
-                        let counter = counters.entry(pattern.placeholder_prefix).or_insert(0);
+                        let counter = counters
+                            .entry(pattern.placeholder_prefix.clone())
+                            .or_insert(0);
                         *counter += 1;
                         let placeholder =
                             format!("{{{{{}_{}}}}}", pattern.placeholder_prefix, counter);
@@ -304,5 +333,48 @@ mod tests {
         let restored = response.choices[0].message.content.as_str().unwrap();
         assert!(restored.contains("alice@example.com"), "got: {restored}");
         assert!(restored.contains("10.0.0.1"), "got: {restored}");
+    }
+
+    #[test]
+    fn from_config_loads_patterns() {
+        let configs = vec![PiiPatternConfig {
+            name: "email_custom".into(),
+            regex: r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}".into(),
+            placeholder_prefix: "CUSTOM_EMAIL".into(),
+        }];
+        let redactor = PiiRedactor::from_config(&configs);
+
+        let messages = vec![user_msg("Contact test@example.com for info")];
+        let (redacted, ctx) = redactor.redact_messages(&messages);
+
+        let content = redacted[0].content.as_str().unwrap();
+        assert!(content.contains("{{CUSTOM_EMAIL_1}}"), "got: {content}");
+        assert!(!content.contains("test@example.com"));
+        assert_eq!(ctx.replacements["{{CUSTOM_EMAIL_1}}"], "test@example.com");
+    }
+
+    #[test]
+    fn from_config_invalid_regex_skipped() {
+        let configs = vec![
+            PiiPatternConfig {
+                name: "bad_regex".into(),
+                regex: r"[invalid((".into(), // malformed regex
+                placeholder_prefix: "BAD".into(),
+            },
+            PiiPatternConfig {
+                name: "good_email".into(),
+                regex: r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}".into(),
+                placeholder_prefix: "EMAIL".into(),
+            },
+        ];
+        // Should not panic — invalid regex is skipped
+        let redactor = PiiRedactor::from_config(&configs);
+
+        // The valid pattern should still work
+        let messages = vec![user_msg("Contact me at alice@test.org")];
+        let (redacted, _ctx) = redactor.redact_messages(&messages);
+        let content = redacted[0].content.as_str().unwrap();
+        assert!(content.contains("{{EMAIL_1}}"), "got: {content}");
+        assert!(!content.contains("alice@test.org"));
     }
 }

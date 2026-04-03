@@ -44,10 +44,11 @@ pub async fn list_providers(
     _auth_user: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<Provider>>, AppError> {
-    let providers =
-        sqlx::query_as::<_, Provider>("SELECT * FROM providers ORDER BY created_at DESC")
-            .fetch_all(&state.db)
-            .await?;
+    let providers = sqlx::query_as::<_, Provider>(
+        "SELECT * FROM providers WHERE deleted_at IS NULL ORDER BY created_at DESC",
+    )
+    .fetch_all(&state.db)
+    .await?;
 
     Ok(Json(providers))
 }
@@ -99,11 +100,13 @@ pub async fn update_provider(
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateProviderRequest>,
 ) -> Result<Json<Provider>, AppError> {
-    let existing = sqlx::query_as::<_, Provider>("SELECT * FROM providers WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or(AppError::NotFound("Provider not found".into()))?;
+    let existing = sqlx::query_as::<_, Provider>(
+        "SELECT * FROM providers WHERE id = $1 AND deleted_at IS NULL",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound("Provider not found".into()))?;
 
     let display_name = req
         .display_name
@@ -142,11 +145,13 @@ pub async fn get_provider(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Provider>, AppError> {
-    let provider = sqlx::query_as::<_, Provider>("SELECT * FROM providers WHERE id = $1")
-        .bind(id)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or(AppError::NotFound("Provider not found".into()))?;
+    let provider = sqlx::query_as::<_, Provider>(
+        "SELECT * FROM providers WHERE id = $1 AND deleted_at IS NULL",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound("Provider not found".into()))?;
 
     Ok(Json(provider))
 }
@@ -156,7 +161,7 @@ pub async fn delete_provider(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    sqlx::query("DELETE FROM providers WHERE id = $1")
+    sqlx::query("UPDATE providers SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL")
         .bind(id)
         .execute(&state.db)
         .await?;

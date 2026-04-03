@@ -48,7 +48,10 @@ AgentBastion solves all of this with a single deployment.
 - **Automatic format conversion** — Anthropic Messages API, Google Gemini, and more, all behind a single OpenAI-compatible interface
 - **Streaming SSE pass-through** — zero-overhead forwarding with real-time token counting
 - **Virtual API keys** — issue scoped `ab-` keys per team, per project, per developer; revoke in one click
+- **API key lifecycle management** — automatic rotation with grace periods, per-key inactivity timeout, expiry warnings, and background policy enforcement
 - **Sliding-window rate limiting** — RPM and TPM limits via Redis, per key or per user
+- **Circuit breaker** — three-state (Closed/Open/HalfOpen) circuit breaker with configurable failure threshold and recovery period
+- **Retry with exponential backoff** — configurable retries with jitter for network errors and upstream rate limits
 - **Real-time cost tracking** — per-model pricing with budget alerts and team attribution
 
 ### MCP Gateway
@@ -64,12 +67,24 @@ AgentBastion solves all of this with a single deployment.
 - **SSO/OIDC** — plug into Zitadel, Okta, Azure AD, or any OIDC-compliant provider
 - **AES-256-GCM encryption** — provider API keys and secrets encrypted at rest
 - **SHA-256 key hashing** — virtual API keys stored as hashes; plaintext shown exactly once
+- **Content Security Policy** — CSP headers on the console port to prevent XSS and injection attacks
+- **JWT entropy enforcement** — minimum 32-character secret with entropy validation at startup
+- **Startup dependency validation** — verifies PostgreSQL, Redis, and encryption key availability with clear error messages before accepting traffic
 - **Security headers** — X-Content-Type-Options, X-Frame-Options, CORS whitelisting, request timeouts
+- **Soft-delete** — users, providers, and API keys use soft-delete (`deleted_at` column) with automatic purge after 30 days
 - **Distroless containers** — minimal attack surface in production (2MB runtime image, no shell)
 
+### Operations & Configuration
+- **Dynamic configuration** — most settings stored in database (`system_settings` table), configurable via Web UI (Admin > Settings with 7 category tabs)
+- **First-run setup wizard** — guided `/setup` wizard creates the super_admin account, configures the site, and optionally adds the first provider and API key
+- **Multi-instance sync** — configuration changes propagated across instances via Redis Pub/Sub
+- **Data retention policies** — configurable retention periods for usage records and audit logs with automatic daily purge
+
 ### Observability
+- **Prometheus metrics** — `GET /metrics` endpoint on the gateway port (3000) exposing `gateway_requests_total`, `gateway_request_duration_seconds`, `gateway_tokens_total`, `gateway_rate_limited_total`, `circuit_breaker_state`, and more
+- **Enhanced health checks** — `/health/live` (liveness probe), `/health/ready` (readiness probe with PostgreSQL and Redis checks), `/api/health` (detailed latency and pool statistics)
 - **Quickwit-powered audit logs** — full-text search across all API calls and tool invocations
-- **Syslog forwarding** — RFC 5424 compliant; integrate with your existing SIEM
+- **Audit log forwarding** — multi-channel delivery: UDP/TCP Syslog (RFC 5424), Kafka, and HTTP webhooks — route audit events to any SIEM, data lake, or alerting pipeline
 - **Usage analytics** — token consumption by user, team, model, and time period
 - **Cost analytics** — MTD spend, budget utilization, per-model cost breakdown
 - **Health dashboard** — real-time status of PostgreSQL, Redis, Quickwit, and all MCP servers
@@ -100,7 +115,7 @@ cargo run -p agent-bastion-server
 # 3. Start frontend dev server
 cd web && pnpm install && pnpm dev
 
-# 4. Open http://localhost:5173
+# 4. Complete the setup wizard at http://localhost:5173/setup
 ```
 
 See the **[Deployment Guide](docs/en/deployment-guide.md)** for production setup with Docker Compose or Kubernetes.
@@ -119,7 +134,7 @@ See the **[Deployment Guide](docs/en/deployment-guide.md)** for production setup
 
 | Port | Server | Exposure | Purpose |
 |------|--------|----------|---------|
-| `3000` | Gateway | **Public** — expose to AI clients | `/v1/chat/completions`, `/v1/models`, `/mcp` |
+| `3000` | Gateway | **Public** — expose to AI clients | `/v1/chat/completions`, `/v1/models`, `/mcp`, `/metrics`, `/health/*` |
 | `3001` | Console | **Internal** — behind VPN/firewall | `/api/*` management endpoints, Web UI |
 
 > In production, **only port 3000** should be reachable from the internet. Port 3001 should be restricted to your admin network.
@@ -134,8 +149,8 @@ AgentBastion/
 │   ├── mcp-gateway/     # MCP proxy: JSON-RPC, tool aggregation, access control
 │   ├── auth/            # JWT, OIDC, API key, password hashing, RBAC
 │   └── common/          # Config, DB, models, crypto, audit logger
-├── migrations/          # 7 PostgreSQL migration files
-├── web/                 # React frontend — 15 page components
+├── migrations/          # 12 PostgreSQL migration files
+├── web/                 # React frontend — ~20 page components
 ├── deploy/
 │   ├── docker/          # Dockerfile.server (distroless), Dockerfile.web (nginx)
 │   ├── docker-compose.yml       # Production deployment

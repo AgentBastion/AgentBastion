@@ -42,8 +42,15 @@ pub async fn require_api_key_or_jwt(
     if token.starts_with("ab-") {
         let key_hash = api_key::hash_api_key(token);
 
+        // Query active keys OR keys within their rotation grace period
         let row = sqlx::query_as::<_, agent_bastion_common::models::ApiKey>(
-            "SELECT * FROM api_keys WHERE key_hash = $1 AND is_active = true",
+            r#"SELECT * FROM api_keys
+               WHERE key_hash = $1
+                 AND deleted_at IS NULL
+                 AND (
+                     is_active = true
+                     OR (grace_period_ends_at IS NOT NULL AND grace_period_ends_at > now())
+                 )"#,
         )
         .bind(&key_hash)
         .fetch_optional(&state.db)

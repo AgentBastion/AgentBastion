@@ -2,7 +2,7 @@
 
 # AgentBastion Configuration Reference
 
-This document provides a complete reference for all configuration options in AgentBastion. Configuration is managed exclusively through environment variables.
+This document provides a complete reference for all configuration options in AgentBastion. Configuration is managed through a combination of environment variables (for infrastructure and secrets) and database-backed dynamic settings (configurable via the admin Web UI).
 
 ---
 
@@ -53,10 +53,11 @@ Redis connection string. Used for rate limiting, OIDC state/nonce storage, and s
 | Default   | —                                                  |
 | Example   | `a3f8c1e0b9d74...` (64-character hex string)       |
 
-Shared secret used for HS256 JWT signing and verification. Must be at least 256 bits (32 bytes / 64 hex characters) for adequate security.
+Shared secret used for HS256 JWT signing and verification. Must be at least 32 characters long, and at least 256 bits (32 bytes / 64 hex characters) is recommended for adequate security. At startup, AgentBastion performs an entropy check on this value and will refuse to start if it does not meet the minimum length requirement.
 
 **Security notes:**
 - Generate with: `openssl rand -hex 32`
+- **Minimum 32 characters required.** Shorter values will cause a startup failure.
 - Changing this value invalidates all active access and refresh tokens, forcing all users to re-authenticate.
 - Never reuse this value across environments (dev/staging/prod).
 - Store in a secrets manager, not in plaintext files.
@@ -367,14 +368,72 @@ Both `JWT_SECRET` and `ENCRYPTION_KEY` expect a 64-character hex string (represe
 
 ---
 
+## Dynamic Configuration (Web UI)
+
+Many settings that previously required environment variables are now stored in the database and configurable through the admin Web UI at runtime. These settings can also be managed via the `GET/PATCH /api/admin/settings` API endpoints.
+
+Changes to dynamic settings take effect immediately without requiring a server restart.
+
+### Authentication & JWT
+
+| Setting                      | Default  | Description                                          |
+| ---------------------------- | -------- | ---------------------------------------------------- |
+| `jwt_access_ttl_seconds`     | `900`    | Access token lifetime in seconds (15 minutes)        |
+| `jwt_refresh_ttl_seconds`    | `604800` | Refresh token lifetime in seconds (7 days)           |
+
+### Cache
+
+| Setting              | Default | Description                              |
+| -------------------- | ------- | ---------------------------------------- |
+| `cache_ttl_seconds`  | `300`   | Default cache TTL for various caches     |
+
+### Security
+
+| Setting                      | Default | Description                                          |
+| ---------------------------- | ------- | ---------------------------------------------------- |
+| `signature_drift_seconds`    | `300`   | Maximum allowed clock drift for signed requests      |
+| `nonce_ttl_seconds`          | `300`   | TTL for nonce values used in replay protection       |
+| `content_filter_patterns`    | `[]`    | Content filter patterns (max 500; severity enum: `low`, `medium`, `high`, `critical`) |
+| `pii_patterns`               | `[]`    | PII detection regex patterns (max 100; max 1000 chars each; validated at save time) |
+
+### Budget
+
+| Setting                      | Default | Description                                          |
+| ---------------------------- | ------- | ---------------------------------------------------- |
+| `budget_warning_threshold`   | `0.8`   | Budget utilization ratio that triggers a warning     |
+| `budget_critical_threshold`  | `0.95`  | Budget utilization ratio that triggers a critical alert |
+
+### API Key Policies
+
+| Setting                        | Default     | Description                                    |
+| ------------------------------ | ----------- | ---------------------------------------------- |
+| `api_key_max_expiry_days`      | `365`       | Maximum allowed expiry for new API keys        |
+| `api_key_default_rate_limit_rpm` | `60`      | Default RPM limit for new API keys             |
+
+### General
+
+| Setting                | Default          | Description                                      |
+| ---------------------- | ---------------- | ------------------------------------------------ |
+| `data_retention_days`  | `30`             | Days to retain soft-deleted records before purge |
+| `site_name`            | `AgentBastion`   | Site name displayed in the Web UI                |
+
+---
+
 ## Startup Validation
 
-AgentBastion validates its configuration at startup and will refuse to start if:
+AgentBastion validates all configuration and dependencies at startup and will refuse to start if:
 
 - `DATABASE_URL` is missing or the database is unreachable
 - `REDIS_URL` is missing or Redis is unreachable
-- `JWT_SECRET` is missing
+- `JWT_SECRET` is missing or shorter than 32 characters
+- `JWT_SECRET` fails the entropy check (e.g., all identical characters)
 - `ENCRYPTION_KEY` is missing or not a valid 64-character hex string
 - `OIDC_*` variables are partially configured (all four must be set, or none)
+
+Additionally, the server performs dependency health checks at startup:
+
+- **PostgreSQL:** Verifies the connection and runs a test query
+- **Redis:** Verifies the connection with a PING command
+- **Quickwit:** If configured, verifies the index exists (non-blocking -- logs a warning if unavailable)
 
 Check the application logs if the server fails to start. Missing or invalid configuration will be reported with clear error messages.

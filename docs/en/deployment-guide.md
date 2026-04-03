@@ -92,21 +92,51 @@ pnpm dev
 
 The Vite dev server starts on `http://localhost:5173` and proxies API requests to the console server at `localhost:3001`.
 
-### 2.5 Creating the First Admin User
+### 2.5 Creating the First Admin User (Setup Wizard)
 
-On a fresh database, register the first user via the console API:
+On a fresh database, AgentBastion provides a setup wizard accessible through the Web UI or the API. The setup wizard creates the first admin user and optionally configures the first AI provider in a single step.
+
+**Via the Web UI:**
+
+Open `http://localhost:5173` in your browser. If the system has not been initialized, the UI will automatically show the setup wizard.
+
+**Via the API:**
+
+Check whether setup is needed:
 
 ```bash
-curl -X POST http://localhost:3001/api/auth/register \
+curl http://localhost:3001/api/setup/status
+# Returns: {"initialized": false, "needs_setup": true}
+```
+
+Initialize the system:
+
+```bash
+curl -X POST http://localhost:3001/api/setup/initialize \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@example.com",
-    "display_name": "Admin",
-    "password": "your-secure-password"
+    "admin": {
+      "email": "admin@example.com",
+      "display_name": "Admin",
+      "password": "your-secure-password"
+    },
+    "provider": {
+      "name": "openai-prod",
+      "display_name": "OpenAI",
+      "provider_type": "openai",
+      "base_url": "https://api.openai.com/v1",
+      "api_key": "sk-..."
+    }
   }'
 ```
 
-Then assign the `super_admin` role. Connect to PostgreSQL and run:
+The `provider` field is optional. You can add providers later through the admin UI.
+
+> **Note:** The setup endpoint is rate-limited (5 requests per minute) and is disabled after the first admin user is created. See the security documentation for details.
+
+**Legacy method (manual):**
+
+Alternatively, register via `POST /api/auth/register` and then assign the `super_admin` role directly in PostgreSQL:
 
 ```sql
 INSERT INTO user_roles (user_id, role_id, scope)
@@ -499,12 +529,32 @@ For disaster recovery:
 
 ### 7.1 Health Endpoints
 
-| Endpoint                  | Port | Purpose                          |
-|---------------------------|------|----------------------------------|
-| `GET /health`             | 3000 | Gateway health (database + Redis connectivity) |
-| `GET /api/health`         | 3001 | Console health                   |
+| Endpoint                  | Port | Purpose                                              |
+|---------------------------|------|------------------------------------------------------|
+| `GET /health`             | 3000 | Gateway basic health check                           |
+| `GET /health/live`        | 3000 | Liveness probe (is the process alive?)               |
+| `GET /health/ready`       | 3000 | Readiness probe (returns 503 if PG or Redis is down) |
+| `GET /api/health`         | 3001 | Console detailed health (latency, pool stats, uptime)|
+| `GET /metrics`            | 3000 | Prometheus metrics (unauthenticated)                 |
 
-Use these endpoints for load balancer health checks, Kubernetes liveness/readiness probes, and uptime monitoring.
+**Recommended probe configuration for Kubernetes:**
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /health/live
+    port: 3000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+readinessProbe:
+  httpGet:
+    path: /health/ready
+    port: 3000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+```
+
+Use `/health/live` for liveness probes (restart the pod if the process is stuck) and `/health/ready` for readiness probes (remove the pod from the load balancer if dependencies are down).
 
 ### 7.2 Structured Logging
 
@@ -525,23 +575,59 @@ RUST_LOG=info,agent_bastion=trace
 
 Logs are written to stdout and can be collected by any log aggregation system (Datadog, Loki, CloudWatch, etc.).
 
-### 7.3 Syslog Forwarding
+### 7.3 Audit Log Forwarding
 
-For environments that use centralized syslog (e.g., Splunk, Graylog), configure the `SYSLOG_ADDR` environment variable:
+AgentBastion supports real-time forwarding of audit events to external systems via four channels:
 
-```bash
-SYSLOG_ADDR=udp://syslog.internal:514
+| Channel | Protocol | Use Case |
+|---------|----------|----------|
+| UDP Syslog | RFC 5424 | Traditional SIEM (Splunk, Graylog) |
+| TCP Syslog | RFC 5424 | Reliable transport for SIEM |
+| Kafka | REST Proxy (JSON) | Data lakes, stream processing pipelines |
+| HTTP Webhook | POST JSON | Custom alerting, Slack/Teams integration |
+
+Configure via the admin console at **Admin > Log Forwarding**:
+- Multiple channels can run in parallel
+- Each channel can be independently enabled/disabled
+- Built-in connection testing and delivery statistics
+- Automatic retry with error counting
+
+Audit events are always written to PostgreSQL and Quickwit (if configured). Forwarding channels provide additional delivery to external systems.
+
+### 7.4 Prometheus Metrics
+
+AgentBastion exposes Prometheus-compatible metrics at `GET /metrics` on the gateway port (3000). This endpoint is unauthenticated to allow standard Prometheus scraping.
+
+Available metrics include:
+- **Request latency histograms** (`http_request_duration_seconds`) -- by endpoint, method, and status
+- **Token throughput counters** (`llm_tokens_total`) -- prompt and completion tokens by model
+- **Active connection gauges** (`http_active_connections`) -- current number of open connections
+- **Error rate counters** (`http_requests_errors_total`) -- by endpoint and error type
+
+**Prometheus scrape configuration:**
+
+```yaml
+scrape_configs:
+  - job_name: 'agentbastion'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['agentbastion:3000']
+    metrics_path: /metrics
 ```
 
-Audit log events will be forwarded to the syslog endpoint in addition to being written to PostgreSQL and Quickwit.
+> **Security:** The `/metrics` endpoint is unauthenticated. In production, restrict access via network policies or a reverse proxy to prevent exposing internal metrics to untrusted networks.
 
-### 7.4 Prometheus Metrics (Future)
+### 7.5 Background Tasks
 
-The codebase includes OpenTelemetry dependencies (`opentelemetry`, `opentelemetry-otlp`, `tracing-opentelemetry`), laying the groundwork for Prometheus-compatible metrics export. This will include:
-- Request latency histograms
-- Token throughput counters
-- Active connection gauges
-- Error rate counters
+AgentBastion runs several background tasks that operate automatically:
+
+| Task                          | Interval   | Description                                                  |
+|-------------------------------|------------|--------------------------------------------------------------|
+| API key lifecycle management  | Periodic   | Disables keys that exceed their inactivity timeout           |
+| Data retention purge          | Daily      | Permanently deletes soft-deleted records older than `data_retention_days` |
+| Key expiry notifications      | Daily      | Logs warnings for keys expiring within 7 days               |
+
+These tasks run within the server process and do not require external schedulers (e.g., cron). They are automatically active when the server starts.
 
 ---
 

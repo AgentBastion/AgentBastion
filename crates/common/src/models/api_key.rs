@@ -21,4 +21,12 @@ pub struct ApiKey {
     pub is_active: bool,
     pub last_used_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    // Lifecycle management fields
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub rotation_period_days: Option<i32>,
+    pub rotated_from_id: Option<Uuid>,
+    pub grace_period_ends_at: Option<DateTime<Utc>>,
+    pub inactivity_timeout_days: Option<i32>,
+    pub disabled_reason: Option<String>,
+    pub last_rotation_at: Option<DateTime<Utc>>,
 }

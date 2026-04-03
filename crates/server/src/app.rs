@@ -17,6 +17,7 @@ use agent_bastion_auth::jwt::JwtManager;
 use agent_bastion_auth::oidc::OidcManager;
 use agent_bastion_common::audit::AuditLogger;
 use agent_bastion_common::config::AppConfig;
+use agent_bastion_common::dynamic_config::DynamicConfig;
 use agent_bastion_gateway::budget_alert::{BudgetAlertConfig, BudgetAlertManager};
 use agent_bastion_gateway::cache::ResponseCache;
 use agent_bastion_gateway::content_filter::ContentFilter;
@@ -41,6 +42,7 @@ pub struct AppState {
     pub redis: Client,
     pub jwt: Arc<JwtManager>,
     pub config: AppConfig,
+    pub dynamic_config: Arc<DynamicConfig>,
     pub audit: AuditLogger,
     pub oidc: Option<OidcManager>,
     pub started_at: chrono::DateTime<chrono::Utc>,
@@ -69,21 +71,61 @@ fn security_layers<S: Clone + Send + Sync + 'static>(router: Router<S>) -> Route
 // Gateway server (port 3000) — AI API + MCP, exposed to downstream clients
 // ---------------------------------------------------------------------------
 
-pub fn create_gateway_app(_config: &AppConfig, state: AppState, jwt: Arc<JwtManager>) -> Router {
+pub async fn create_gateway_app(
+    _config: &AppConfig,
+    state: AppState,
+    jwt: Arc<JwtManager>,
+) -> Router {
+    // Load dynamic config values for gateway initialization
+    let dc = &state.dynamic_config;
+    let cache_ttl = dc.cache_ttl_secs().await;
+    let budget_thresholds = dc.budget_alert_thresholds().await;
+    let budget_webhook = dc.budget_webhook_url().await;
+
+    // Load content filter patterns from dynamic config
+    let content_filter = match dc.get_json("security.content_filter_patterns").await {
+        Some(v) => {
+            if let Ok(patterns) = serde_json::from_value::<
+                Vec<agent_bastion_gateway::content_filter::DenyPatternConfig>,
+            >(v)
+            {
+                ContentFilter::from_config(&patterns)
+            } else {
+                ContentFilter::new()
+            }
+        }
+        None => ContentFilter::new(),
+    };
+
+    // Load PII redactor patterns from dynamic config
+    let pii_redactor = match dc.get_json("security.pii_redactor_patterns").await {
+        Some(v) => {
+            if let Ok(patterns) = serde_json::from_value::<
+                Vec<agent_bastion_gateway::pii_redactor::PiiPatternConfig>,
+            >(v)
+            {
+                PiiRedactor::from_config(&patterns)
+            } else {
+                PiiRedactor::new()
+            }
+        }
+        None => PiiRedactor::new(),
+    };
+
     // AI Gateway: /v1/*
     let model_router = Arc::new(ModelRouter::new());
     let gateway_state = GatewayState {
         router: model_router,
         model_mapper: Arc::new(ModelMapper::new()),
-        content_filter: Arc::new(ContentFilter::new()),
+        content_filter: Arc::new(content_filter),
         quota: Arc::new(QuotaManager::new(state.redis.clone())),
-        cache: Arc::new(ResponseCache::new(state.redis.clone(), 3600)),
-        pii_redactor: Arc::new(PiiRedactor::new()),
+        cache: Arc::new(ResponseCache::new(state.redis.clone(), cache_ttl)),
+        pii_redactor: Arc::new(pii_redactor),
         budget_alert: Some(Arc::new(BudgetAlertManager::new(
             state.redis.clone(),
             BudgetAlertConfig {
-                webhook_url: None, // Configured via admin API
-                thresholds: vec![0.50, 0.80, 0.95],
+                webhook_url: budget_webhook,
+                thresholds: budget_thresholds,
             },
         ))),
     };
@@ -115,11 +157,24 @@ pub fn create_gateway_app(_config: &AppConfig, state: AppState, jwt: Arc<JwtMana
         .route("/mcp", delete(streamable_http::handle_delete))
         .with_state(mcp_state);
 
-    // Health check
-    let health = Router::new().route("/health", get(handlers::health::health_check));
+    // Health check routes
+    let health = Router::new()
+        .route("/health", get(handlers::health::health_check))
+        .route("/health/live", get(handlers::health::liveness))
+        .route(
+            "/health/ready",
+            get(handlers::health::readiness).with_state(state.clone()),
+        );
+
+    // Prometheus metrics endpoint
+    let prom_handle = handlers::metrics::install_prometheus_recorder();
+    let metrics_route = Router::new()
+        .route("/metrics", get(handlers::metrics::prometheus_metrics))
+        .with_state(prom_handle);
 
     let app = Router::new()
         .merge(health)
+        .merge(metrics_route)
         .merge(ai_routes)
         .merge(mcp_routes)
         .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024)) // 10MB for large prompts
@@ -164,7 +219,13 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
         .route("/api/auth/refresh", post(handlers::auth::refresh))
         .route("/api/auth/sso/authorize", get(handlers::sso::sso_authorize))
         .route("/api/auth/sso/callback", get(handlers::sso::sso_callback))
-        .route("/api/auth/sso/status", get(handlers::health::sso_status));
+        .route("/api/auth/sso/status", get(handlers::health::sso_status))
+        // Setup routes (public, guarded by initialization check)
+        .route("/api/setup/status", get(handlers::setup::setup_status))
+        .route(
+            "/api/setup/initialize",
+            post(handlers::setup::setup_initialize),
+        );
 
     // User-level routes (any authenticated user)
     // Signature verification runs on POST/DELETE/PATCH (skipped for GET)
@@ -181,8 +242,18 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
             get(handlers::api_keys::list_keys).post(handlers::api_keys::create_key),
         )
         .route(
+            "/api/keys/expiring",
+            get(handlers::api_keys::list_expiring_keys),
+        )
+        .route(
             "/api/keys/{id}",
-            get(handlers::api_keys::get_key).delete(handlers::api_keys::revoke_key),
+            get(handlers::api_keys::get_key)
+                .patch(handlers::api_keys::update_key)
+                .delete(handlers::api_keys::revoke_key),
+        )
+        .route(
+            "/api/keys/{id}/rotate",
+            post(handlers::api_keys::rotate_key),
         )
         .route(
             "/api/dashboard/stats",
@@ -261,6 +332,15 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
             "/api/admin/settings/audit",
             get(handlers::admin::get_audit_settings),
         )
+        // Dynamic settings CRUD
+        .route(
+            "/api/admin/settings",
+            get(handlers::admin::get_all_settings).patch(handlers::admin::update_settings),
+        )
+        .route(
+            "/api/admin/settings/category/{category}",
+            get(handlers::admin::get_settings_by_category),
+        )
         // Log forwarders CRUD
         .route(
             "/api/admin/log-forwarders",
@@ -298,7 +378,13 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
         ));
 
     // Public health check (no internal details)
-    let health = Router::new().route("/health", get(handlers::health::health_check));
+    let health = Router::new()
+        .route("/health", get(handlers::health::health_check))
+        .route("/health/live", get(handlers::health::liveness))
+        .route(
+            "/health/ready",
+            get(handlers::health::readiness).with_state(state.clone()),
+        );
 
     let app = Router::new()
         .merge(health)
@@ -311,6 +397,13 @@ pub fn create_console_app(config: &AppConfig, state: AppState) -> Router {
             std::time::Duration::from_secs(30),
         ))
         .layer(cors)
+        // CSP header for console
+        .layer(SetResponseHeaderLayer::overriding(
+            axum::http::HeaderName::from_static("content-security-policy"),
+            HeaderValue::from_static(
+                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
+            ),
+        ))
         .with_state(state);
 
     security_layers(app)

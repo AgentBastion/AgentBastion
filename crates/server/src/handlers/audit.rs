@@ -57,7 +57,9 @@ pub async fn list_audit_logs(
             .map(|d| d.and_hms_opt(23, 59, 59).unwrap())
     });
 
-    // Build query dynamically but always use parameterized binds
+    // SAFETY: WHERE clause is built ONLY from hardcoded format strings with $N
+    // parameter placeholders. User input is NEVER interpolated into the SQL string
+    // itself — all values are bound via sqlx parameterized binds below.
     let has_search = search_pattern.is_some();
     let has_from = from_dt.is_some();
     let has_to = to_dt.is_some();
