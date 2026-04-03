@@ -1,24 +1,20 @@
 # Stage 1: Build
 FROM rust:1.86-bookworm AS builder
 
-ARG TARGETARCH
-
 WORKDIR /app
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates/ crates/
 COPY migrations/ migrations/
 COPY deploy/quickwit/ deploy/quickwit/
 
-# Install musl toolchains for the target architecture
+# Determine musl target from the native build arch
+ARG TARGETARCH
 RUN apt-get update && apt-get install -y musl-tools && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        apt-get install -y gcc-aarch64-linux-gnu && \
         rustup target add aarch64-unknown-linux-musl; \
     else \
         rustup target add x86_64-unknown-linux-musl; \
     fi
-
-ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
 
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
         cargo build --release --target aarch64-unknown-linux-musl -p agent-bastion-server && \
