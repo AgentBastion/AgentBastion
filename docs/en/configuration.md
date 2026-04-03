@@ -162,18 +162,6 @@ Name of the Quickwit index where audit log entries are stored. AgentBastion auto
 
 ---
 
-#### `SYSLOG_ADDR`
-
-| Property  | Value                        |
-| --------- | ---------------------------- |
-| Required  | No                           |
-| Default   | —                            |
-| Example   | `siem.corp.internal:514`     |
-
-> **Deprecated.** Log forwarding is now configured dynamically through the admin Web UI (Admin > Log Forwarders). This environment variable is retained for backward compatibility but has no effect. Use the database-driven log forwarder system instead, which supports UDP/TCP Syslog, Kafka, and HTTP webhooks.
-
----
-
 #### `RUST_LOG`
 
 | Property  | Value                                                    |
@@ -337,7 +325,6 @@ On startup, AgentBastion loads all active providers from the database and regist
 | `ENCRYPTION_KEY`  | Any stable 32-byte hex for dev convenience   | Cryptographically random, stored in HSM     |
 | `CORS_ORIGINS`    | `http://localhost:5173`                      | `https://console.yourdomain.com`            |
 | `RUST_LOG`        | `agentbastion=debug,tower_http=debug`        | `info` or `agentbastion=info`               |
-| `SYSLOG_ADDR`     | _(unset)_                                    | SIEM receiver address                       |
 | OIDC variables    | _(unset unless testing SSO)_                 | Fully configured                            |
 
 ### Using .env Files

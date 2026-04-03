@@ -321,13 +321,13 @@ fn validate_setting(key: &str, value: &Value) -> anyhow::Result<()> {
         // JWT TTLs need reasonable bounds
         "auth.jwt_access_ttl_secs" => {
             let n = value.as_i64().ok_or_else(|| anyhow::anyhow!("{key}: expected integer"))?;
-            if n < 60 || n > 86400 {
+            if !(60..=86400).contains(&n) {
                 anyhow::bail!("{key}: must be between 60 and 86400 seconds");
             }
         }
         "auth.jwt_refresh_ttl_days" => {
             let n = value.as_i64().ok_or_else(|| anyhow::anyhow!("{key}: expected integer"))?;
-            if n < 1 || n > 365 {
+            if !(1..=365).contains(&n) {
                 anyhow::bail!("{key}: must be between 1 and 365 days");
             }
         }
@@ -347,10 +347,12 @@ fn validate_setting(key: &str, value: &Value) -> anyhow::Result<()> {
 
         // Webhook URL validation
         "budget.webhook_url" => {
-            if let Some(url) = value.as_str() {
-                if !url.is_empty() && !url.starts_with("http://") && !url.starts_with("https://") {
-                    anyhow::bail!("{key}: must be a valid http/https URL");
-                }
+            if let Some(url) = value.as_str()
+                && !url.is_empty()
+                && !url.starts_with("http://")
+                && !url.starts_with("https://")
+            {
+                anyhow::bail!("{key}: must be a valid http/https URL");
             }
         }
 

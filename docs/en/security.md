@@ -278,19 +278,19 @@ Audit entries are indexed into Quickwit for full-text search and analytics:
 - Entries are sent asynchronously to avoid blocking request processing.
 - The console provides a search UI at `/api/audit/logs` with support for time-range filtering and full-text queries.
 
-### 5.4 Syslog / SIEM Integration
+### 5.4 Log Forwarder / SIEM Integration
 
-For enterprise environments, AgentBastion can forward audit logs to a syslog receiver:
+For enterprise environments, AgentBastion can forward audit logs to external systems via the admin Web UI (Admin > Log Forwarders):
 
-- **Protocol:** UDP syslog (RFC 5424)
-- **Configuration:** Set the `SYSLOG_ADDR` environment variable (e.g. `siem.corp.internal:514`)
-- **Format:** RFC 5424 structured data with the following fields:
+- **Supported transports:** UDP Syslog, TCP Syslog (RFC 5424), Kafka, HTTP Webhook
+- **Configuration:** Managed dynamically through the database — no restart required
+- **Format:** RFC 5424 structured data for syslog transports:
 
 ```
 <14>1 2026-03-28T09:15:00.000Z agentbastion - - - [agentbastion@0 action="provider.create" user="admin@example.com" resource_type="provider" resource_id="uuid"] Provider created: openai-prod
 ```
 
-This allows integration with SIEM platforms such as Splunk, Elastic SIEM, Microsoft Sentinel, and others that accept RFC 5424 syslog.
+This allows integration with SIEM platforms such as Splunk, Elastic SIEM, Microsoft Sentinel, and others.
 
 ---
 
@@ -387,7 +387,7 @@ Use this checklist when preparing AgentBastion for production deployment.
 
 - [ ] Set up log rotation for application logs
 - [ ] Verify Quickwit audit index is being populated
-- [ ] Configure syslog forwarding to your SIEM if applicable (`SYSLOG_ADDR`)
+- [ ] Configure log forwarders to your SIEM via Admin > Log Forwarders if applicable
 - [ ] Set up alerts for `auth.login_failed` spikes (potential brute-force)
 - [ ] Monitor the `/api/health`, `/health/live`, and `/health/ready` endpoints with your infrastructure monitoring system
 - [ ] Configure Prometheus scraping of the `/metrics` endpoint (gateway port 3000)

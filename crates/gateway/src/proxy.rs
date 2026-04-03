@@ -122,26 +122,26 @@ pub async fn proxy_chat_completion(
         }
 
         // 8c. Budget alert check (async, non-blocking)
-        if let Some(ref budget_alert) = state.budget_alert {
-            if let Some(ref usage) = response.usage {
-                let request_cost = state.cost_tracker.calculate_cost(
-                    &request.model,
-                    usage.prompt_tokens,
-                    usage.completion_tokens,
-                );
-                if request_cost > 0.0 {
-                    let alert = Arc::clone(budget_alert);
-                    let key = quota_key.clone();
-                    let quota = state.quota.clone();
-                    tokio::spawn(async move {
-                        // Get monthly spend from quota tracker
-                        if let Ok(info) = quota.get_usage(&key).await {
-                            let budget_limit = info.limit as f64;
-                            let current_spend = info.used as f64;
-                            alert.check_and_alert(&key, current_spend, budget_limit).await;
-                        }
-                    });
-                }
+        if let Some(ref budget_alert) = state.budget_alert
+            && let Some(ref usage) = response.usage
+        {
+            let request_cost = state.cost_tracker.calculate_cost(
+                &request.model,
+                usage.prompt_tokens,
+                usage.completion_tokens,
+            );
+            if request_cost > 0.0 {
+                let alert = Arc::clone(budget_alert);
+                let key = quota_key.clone();
+                let quota = state.quota.clone();
+                tokio::spawn(async move {
+                    // Get monthly spend from quota tracker
+                    if let Ok(info) = quota.get_usage(&key).await {
+                        let budget_limit = info.limit as f64;
+                        let current_spend = info.used as f64;
+                        alert.check_and_alert(&key, current_spend, budget_limit).await;
+                    }
+                });
             }
         }
 

@@ -69,10 +69,6 @@ quickwit:
     accessKeyId: ""
     secretAccessKey: ""
 
-syslog:
-  enabled: false
-  addr: ""
-
 autoscaling:
   enabled: false
   minReplicas: 1

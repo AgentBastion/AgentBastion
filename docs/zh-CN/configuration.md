@@ -162,18 +162,6 @@ Quickwit 实例的基础 URL，用于审计日志存储和搜索。审计日志*
 
 ---
 
-#### `SYSLOG_ADDR`
-
-| 属性      | 值                           |
-| --------- | ---------------------------- |
-| 必填      | 否                           |
-| 默认值    | —                            |
-| 示例      | `siem.corp.internal:514`     |
-
-> **已弃用。** 日志转发现在通过管理员 Web UI（管理 > 日志转发器）动态配置。此环境变量保留用于向后兼容，但不再生效。请使用数据库驱动的日志转发器系统，支持 UDP/TCP Syslog、Kafka 和 HTTP Webhook。
-
----
-
 #### `RUST_LOG`
 
 | 属性      | 值                                                       |
@@ -337,7 +325,6 @@ AWS Bedrock 通过官方 `aws-sigv4` Rust crate 使用 SigV4 请求签名。`bas
 | `ENCRYPTION_KEY`  | 任意稳定的 32 字节十六进制值，方便开发       | 密码学随机，存储在 HSM 中                   |
 | `CORS_ORIGINS`    | `http://localhost:5173`                      | `https://console.yourdomain.com`            |
 | `RUST_LOG`        | `agentbastion=debug,tower_http=debug`        | `info` 或 `agentbastion=info`               |
-| `SYSLOG_ADDR`     | _（未设置）_                                 | SIEM 接收器地址                             |
 | OIDC 变量         | _（除非测试 SSO 否则未设置）_                | 完整配置                                    |
 
 ### 使用 .env 文件

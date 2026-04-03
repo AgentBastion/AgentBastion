@@ -15,9 +15,6 @@ data:
   QUICKWIT_URL: {{ .Values.quickwit.url | quote }}
   QUICKWIT_INDEX: {{ .Values.quickwit.index | quote }}
   {{- end }}
-  {{- if .Values.syslog.enabled }}
-  SYSLOG_ADDR: {{ .Values.syslog.addr | quote }}
-  {{- end }}
   {{- if .Values.secrets.oidcIssuerUrl }}
   OIDC_ISSUER_URL: {{ .Values.secrets.oidcIssuerUrl | quote }}
   {{- end }}

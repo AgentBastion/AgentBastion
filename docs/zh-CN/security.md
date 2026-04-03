@@ -278,19 +278,19 @@ AgentBastion 将关注点分离到两个端口：
 - 条目异步发送，以避免阻塞请求处理。
 - 控制台在 `/api/audit/logs` 提供搜索 UI，支持时间范围过滤和全文查询。
 
-### 5.4 Syslog / SIEM 集成
+### 5.4 日志转发 / SIEM 集成
 
-对于企业环境，AgentBastion 可以将审计日志转发到 syslog 接收器：
+对于企业环境，AgentBastion 可以通过管理员 Web UI（管理 > 日志转发器）将审计日志转发到外部系统：
 
-- **协议：** UDP syslog（RFC 5424）
-- **配置：** 设置 `SYSLOG_ADDR` 环境变量（如 `siem.corp.internal:514`）
-- **格式：** RFC 5424 结构化数据，包含以下字段：
+- **支持的传输方式：** UDP Syslog、TCP Syslog (RFC 5424)、Kafka、HTTP Webhook
+- **配置：** 通过数据库动态管理——无需重启
+- **格式：** Syslog 传输使用 RFC 5424 结构化数据：
 
 ```
 <14>1 2026-03-28T09:15:00.000Z agentbastion - - - [agentbastion@0 action="provider.create" user="admin@example.com" resource_type="provider" resource_id="uuid"] Provider created: openai-prod
 ```
 
-这允许与接受 RFC 5424 syslog 的 SIEM 平台集成，如 Splunk、Elastic SIEM、Microsoft Sentinel 等。
+这允许与 SIEM 平台集成，如 Splunk、Elastic SIEM、Microsoft Sentinel 等。
 
 ---
 
@@ -387,7 +387,7 @@ AgentBastion 对关键资源使用软删除：
 
 - [ ] 为应用日志设置日志轮转
 - [ ] 验证 Quickwit 审计索引正在被填充
-- [ ] 如适用，配置 syslog 转发到您的 SIEM（`SYSLOG_ADDR`）
+- [ ] 如适用，通过管理 > 日志转发器配置日志转发到您的 SIEM
 - [ ] 为 `auth.login_failed` 激增设置告警（可能的暴力攻击）
 - [ ] 使用基础设施监控系统监控 `/api/health`、`/health/live` 和 `/health/ready` 端点
 - [ ] 配置 Prometheus 抓取网关端口（3000）的 `/metrics` 端点
