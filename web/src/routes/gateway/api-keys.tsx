@@ -23,8 +23,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Copy, Check, Ban, RotateCw, Pencil } from 'lucide-react';
+import { Plus, Copy, Check, Ban, RotateCw, Pencil, KeyRound } from 'lucide-react';
 import { api, apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -186,6 +189,7 @@ export function ApiKeysPage() {
   const [rotateSubmitting, setRotateSubmitting] = useState(false);
   const [rotateError, setRotateError] = useState('');
   const [rotateCopied, setRotateCopied] = useState(false);
+  const [revokeTargetId, setRevokeTargetId] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // Data fetching
@@ -275,12 +279,13 @@ export function ApiKeysPage() {
   // ---------------------------------------------------------------------------
 
   const handleRevoke = async (id: string) => {
-    if (!confirm(t('apiKeys.revokeConfirm'))) return;
     try {
       await apiDelete(`/api/keys/${id}`);
+      setRevokeTargetId(null);
+      toast.success(t('common.deleteSuccess'));
       await fetchKeys();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke key');
+      toast.error(err instanceof Error ? err.message : t('common.operationFailed'));
     }
   };
 
@@ -532,9 +537,22 @@ export function ApiKeysPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-muted-foreground">{t('apiKeys.loadingKeys')}</p>
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-20 font-mono" />
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-5 w-14 rounded-full" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              ))}
+            </div>
           ) : filteredKeys.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
+              <KeyRound className="h-10 w-10 text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground">
                 {tab === 'expiring' ? t('common.noData') : t('apiKeys.noKeys')}
               </p>
@@ -584,7 +602,7 @@ export function ApiKeysPage() {
                             <Button variant="ghost" size="icon-sm" onClick={() => openRotateDialog(k)} title={t('apiKeys.rotate')}>
                               <RotateCw className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon-sm" onClick={() => handleRevoke(k.id)} title={t('common.revoke')}>
+                            <Button variant="ghost" size="icon-sm" onClick={() => setRevokeTargetId(k.id)} title={t('common.revoke')}>
                               <Ban className="h-4 w-4" />
                             </Button>
                           </>
@@ -598,6 +616,16 @@ export function ApiKeysPage() {
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={revokeTargetId !== null}
+        onOpenChange={(open) => { if (!open) setRevokeTargetId(null); }}
+        title={t('common.revoke')}
+        description={t('apiKeys.revokeConfirm')}
+        variant="destructive"
+        confirmLabel={t('common.revoke')}
+        onConfirm={() => { if (revokeTargetId) handleRevoke(revokeTargetId); }}
+      />
     </div>
   );
 }

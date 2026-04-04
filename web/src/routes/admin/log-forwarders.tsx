@@ -38,6 +38,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import { api, apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface LogForwarder {
   id: string;
@@ -291,7 +292,7 @@ export function LogForwardersPage() {
               </Button>
             }
           />
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{t('logForwarders.addForwarder')}</DialogTitle>
               <DialogDescription>{t('logForwarders.dialogDescription')}</DialogDescription>
@@ -321,7 +322,7 @@ export function LogForwardersPage() {
               {formType === 'syslog' && (
                 <>
                   <div>
-                    <Label>传输协议</Label>
+                    <Label>{t('logForwarders.transportProtocol')}</Label>
                     <RadioGroup value={formSyslogProto} onValueChange={(v) => setFormSyslogProto(v as 'udp' | 'tcp')} className="flex gap-4 mt-1">
                       {(['udp', 'tcp'] as const).map((proto) => (
                         <label key={proto} className="flex items-center gap-1.5 text-sm cursor-pointer">
@@ -430,9 +431,21 @@ export function LogForwardersPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-5 w-14 rounded-full" />
+                </div>
+              ))}
+            </div>
           ) : forwarders.length === 0 ? (
-            <div className="py-8 text-center">
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Send className="h-10 w-10 text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground">{t('logForwarders.noForwarders')}</p>
               <p className="mt-1 text-xs text-muted-foreground">{t('logForwarders.noForwardersHint')}</p>
             </div>
@@ -533,7 +546,7 @@ export function LogForwardersPage() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('logForwarders.editForwarder')}</DialogTitle>
             <DialogDescription>{t('logForwarders.editDescription')}</DialogDescription>

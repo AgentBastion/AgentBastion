@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Wrench } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface McpTool {
   id: string;
@@ -79,7 +80,14 @@ export function McpToolsPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">{t('mcpTools.loadingTools')}</p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="pb-2"><Skeleton className="h-4 w-32" /></CardHeader>
+              <CardContent><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-2/3 mt-2" /></CardContent>
+            </Card>
+          ))}
+        </div>
       ) : filteredTools.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">

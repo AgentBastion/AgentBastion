@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, LogOut as LogOutIcon } from 'lucide-react';
+import { Plus, LogOut as LogOutIcon, Users as UsersIcon } from 'lucide-react';
 import { api, apiPost } from '@/lib/api';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 
@@ -180,9 +181,21 @@ export function UsersPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-muted-foreground">{t('users.loadingUsers')}</p>
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-5 w-14 rounded-full" />
+                  <Skeleton className="h-5 w-14 rounded-full" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              ))}
+            </div>
           ) : users.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
+              <UsersIcon className="h-10 w-10 text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground">{t('users.noUsers')}</p>
             </div>
           ) : (

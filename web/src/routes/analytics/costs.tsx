@@ -12,6 +12,7 @@ import {
 import { DollarSign, TrendingUp } from 'lucide-react';
 import { api } from '@/lib/api';
 import { SimpleBarChart } from '@/components/ui/simple-chart';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface CostRow {
   model_id: string;
@@ -74,7 +75,7 @@ export function CostsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loading ? '...' : `$${stats.total_cost_mtd.toFixed(2)}`}
+              {loading ? <Skeleton className="h-8 w-24" /> : `$${stats.total_cost_mtd.toFixed(2)}`}
             </div>
           </CardContent>
         </Card>
@@ -85,10 +86,10 @@ export function CostsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loading ? '...' : stats.budget_usage_pct != null ? `${budgetPct.toFixed(1)}%` : '—'}
+              {loading ? <Skeleton className="h-8 w-24" /> : stats.budget_usage_pct != null ? `${budgetPct.toFixed(1)}%` : '—'}
             </div>
             {stats.budget_usage_pct != null && (
-              <div className="mt-2 h-2 w-full rounded-full bg-muted">
+              <div className="mt-2 h-2 w-full rounded-full bg-muted" role="progressbar" aria-valuenow={budgetPct} aria-valuemin={0} aria-valuemax={100}>
                 <div
                   className="h-full rounded-full bg-primary transition-all"
                   style={{ width: `${Math.min(budgetPct, 100)}%` }}
@@ -105,7 +106,7 @@ export function CostsPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex h-48 items-center justify-center text-muted-foreground">{t('common.loading')}</div>
+            <Skeleton className="h-48 w-full" />
           ) : chartData.length === 0 ? (
             <div className="flex h-48 items-center justify-center text-muted-foreground">{t('analyticsCosts.noCosts')}</div>
           ) : (
@@ -124,9 +125,20 @@ export function CostsPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-muted-foreground">{t('analyticsCosts.loadingCosts')}</p>
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              ))}
+            </div>
           ) : rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
+              <DollarSign className="h-10 w-10 text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground">{t('analyticsCosts.noCosts')}</p>
             </div>
           ) : (

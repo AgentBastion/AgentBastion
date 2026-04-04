@@ -23,8 +23,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Trash2, Search, Pencil, X } from 'lucide-react';
+import { Plus, Trash2, Search, Pencil, X, Server } from 'lucide-react';
 import { api, apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 
 interface McpServer {
   id: string;
@@ -71,6 +74,7 @@ export function McpServersPage() {
   const [editCustomHeaders, setEditCustomHeaders] = useState<[string, string][]>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const fetchServers = async () => {
     try {
@@ -123,12 +127,13 @@ export function McpServersPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(t('mcpServers.deleteConfirm'))) return;
     try {
       await apiDelete(`/api/mcp/servers/${id}`);
+      setDeleteTargetId(null);
+      toast.success(t('common.deleteSuccess'));
       await fetchServers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete server');
+      toast.error(err instanceof Error ? err.message : t('common.operationFailed'));
     }
   };
 
@@ -187,7 +192,7 @@ export function McpServersPage() {
             <Plus className="h-4 w-4" />
             {t('mcpServers.registerServer')}
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{t('mcpServers.dialogTitle')}</DialogTitle>
               <DialogDescription>{t('mcpServers.dialogDescription')}</DialogDescription>
@@ -274,9 +279,21 @@ export function McpServersPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-muted-foreground">{t('mcpServers.loadingServers')}</p>
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-8" />
+                </div>
+              ))}
+            </div>
           ) : servers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Server className="h-10 w-10 text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground">{t('mcpServers.noServers')}</p>
               <p className="text-xs text-muted-foreground mt-1">{t('mcpServers.noServersHint')}</p>
             </div>
@@ -318,7 +335,7 @@ export function McpServersPage() {
                         <Button variant="ghost" size="icon-sm" onClick={() => handleDiscover(s.id)} title={t('mcpServers.discoverTools')}>
                           <Search className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(s.id)} title={t('common.delete')}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => setDeleteTargetId(s.id)} title={t('common.delete')}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -333,7 +350,7 @@ export function McpServersPage() {
 
       {/* Edit MCP Server Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('mcpServers.editServer')}</DialogTitle>
             <DialogDescription>{t('mcpServers.editDescription')}</DialogDescription>
@@ -381,6 +398,16 @@ export function McpServersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteTargetId !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}
+        title={t('common.delete')}
+        description={t('mcpServers.deleteConfirm')}
+        variant="destructive"
+        confirmLabel={t('common.delete')}
+        onConfirm={() => { if (deleteTargetId) handleDelete(deleteTargetId); }}
+      />
     </div>
   );
 }

@@ -21,6 +21,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Shield, Plus, Pencil, Trash2, Copy, FileJson } from 'lucide-react';
 import { api, apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface SystemRole {
   name: string;
@@ -452,7 +453,7 @@ export function RolesPage() {
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger render={<Button onClick={() => setCreateOpen(true)}><Plus className="mr-2 h-4 w-4" />{t('roles.addRole')}</Button>} />
-          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleCreate}>
               <DialogHeader>
                 <DialogTitle>{t('roles.addRole')}</DialogTitle>
@@ -537,9 +538,22 @@ export function RolesPage() {
       <div>
         <h2 className="text-lg font-medium mb-3">{t('roles.customRoles')}</h2>
         {loading ? (
-          <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i}>
+                <CardHeader className="pb-3"><Skeleton className="h-5 w-28" /></CardHeader>
+                <CardContent className="space-y-2">
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-2/3" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         ) : customRoles.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">{t('roles.noCustomRoles')}</p>
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <Shield className="h-10 w-10 text-muted-foreground mb-3" />
+            <p className="text-sm text-muted-foreground">{t('roles.noCustomRoles')}</p>
+          </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {customRoles.map((role) => (
@@ -578,7 +592,7 @@ export function RolesPage() {
 
       {/* Edit dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <form onSubmit={handleEdit}>
             <DialogHeader>
               <DialogTitle>{t('roles.editRole')}</DialogTitle>

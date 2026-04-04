@@ -12,8 +12,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search } from 'lucide-react';
+import { Search, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface PlatformLogEntry {
   id: string;
@@ -127,9 +128,21 @@ export function PlatformLogsPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              ))}
+            </div>
           ) : logs.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">{t('platformLogs.noLogs')}</p>
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <FileText className="h-10 w-10 text-muted-foreground mb-3" />
+              <p className="text-sm text-muted-foreground">{t('platformLogs.noLogs')}</p>
+            </div>
           ) : (
             <Table>
               <TableHeader>

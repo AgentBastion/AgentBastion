@@ -12,8 +12,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, ChevronDown, ChevronRight, ChevronLeft, ChevronRight as ChevronRightNav } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, ChevronLeft, ChevronRight as ChevronRightNav, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface AuditLog {
   id: string;
@@ -138,9 +139,20 @@ export function AuditPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-muted-foreground">{t('audit.loadingLogs')}</p>
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-8" />
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              ))}
+            </div>
           ) : logs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
+              <FileText className="h-10 w-10 text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground">{t('audit.noLogs')}</p>
             </div>
           ) : (
@@ -165,6 +177,7 @@ export function AuditPage() {
                             <Button
                               variant="ghost"
                               size="icon-xs"
+                              aria-label="Toggle details"
                               onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}
                             >
                               {expandedRow === log.id

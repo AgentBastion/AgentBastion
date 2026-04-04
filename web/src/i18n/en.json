@@ -28,7 +28,12 @@
     "edit": "Edit",
     "total": "Total",
     "all": "All",
-    "none": "None"
+    "none": "None",
+    "deleteSuccess": "Deleted successfully",
+    "saveSuccess": "Saved successfully",
+    "copySuccess": "Copied to clipboard",
+    "operationSuccess": "Operation completed",
+    "operationFailed": "Operation failed"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -457,7 +462,8 @@
     "noForwardersHint": "Add a forwarder to start sending audit logs to external systems.",
     "editForwarder": "Edit Forwarder",
     "editDescription": "Update forwarder name and configuration.",
-    "logTypes": "Log Types"
+    "logTypes": "Log Types",
+    "transportProtocol": "Transport Protocol"
   },
   "guide": {
     "title": "Configuration Guide",

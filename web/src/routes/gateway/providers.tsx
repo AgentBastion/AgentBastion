@@ -23,8 +23,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Trash2, Pencil, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, Plug } from 'lucide-react';
 import { api, apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 
 interface Provider {
   id: string;
@@ -71,6 +74,7 @@ export function ProvidersPage() {
   const [editCustomHeaders, setEditCustomHeaders] = useState<[string, string][]>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const fetchProviders = async () => {
     try {
@@ -121,12 +125,13 @@ export function ProvidersPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(t('providers.deleteConfirm'))) return;
     try {
       await apiDelete(`/api/admin/providers/${id}`);
+      setDeleteTargetId(null);
+      toast.success(t('common.deleteSuccess'));
       await fetchProviders();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete provider');
+      toast.error(err instanceof Error ? err.message : t('common.operationFailed'));
     }
   };
 
@@ -177,7 +182,7 @@ export function ProvidersPage() {
             <Plus className="h-4 w-4" />
             {t('providers.addProvider')}
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{t('providers.addProvider')}</DialogTitle>
               <DialogDescription>{t('providers.dialogDescription')}</DialogDescription>
@@ -271,9 +276,20 @@ export function ProvidersPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-muted-foreground">{t('providers.loadingProviders')}</p>
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-5 w-14 rounded-full" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              ))}
+            </div>
           ) : providers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Plug className="h-10 w-10 text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground">{t('providers.noProviders')}</p>
               <p className="text-xs text-muted-foreground mt-1">{t('providers.noProvidersHint')}</p>
             </div>
@@ -312,7 +328,7 @@ export function ProvidersPage() {
                         <Button variant="ghost" size="icon-sm" onClick={() => openEditDialog(p)} title={t('common.edit')}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(p.id)} title={t('common.delete')}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => setDeleteTargetId(p.id)} title={t('common.delete')}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -327,7 +343,7 @@ export function ProvidersPage() {
 
       {/* Edit Provider Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('providers.editProvider')}</DialogTitle>
             <DialogDescription>{t('providers.editDescription')}</DialogDescription>
@@ -375,6 +391,16 @@ export function ProvidersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteTargetId !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}
+        title={t('common.delete')}
+        description={t('providers.deleteConfirm')}
+        variant="destructive"
+        confirmLabel={t('common.delete')}
+        onConfirm={() => { if (deleteTargetId) handleDelete(deleteTargetId); }}
+      />
     </div>
   );
 }

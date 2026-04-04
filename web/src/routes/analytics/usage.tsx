@@ -12,6 +12,7 @@ import {
 import { BarChart3, Hash } from 'lucide-react';
 import { api } from '@/lib/api';
 import { SimpleBarChart } from '@/components/ui/simple-chart';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface UsageRow {
   date: string;
@@ -73,7 +74,7 @@ export function UsagePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loading ? '...' : stats.total_tokens_today.toLocaleString()}
+              {loading ? <Skeleton className="h-8 w-24" /> : stats.total_tokens_today.toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -84,7 +85,7 @@ export function UsagePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loading ? '...' : stats.total_requests_today.toLocaleString()}
+              {loading ? <Skeleton className="h-8 w-24" /> : stats.total_requests_today.toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -96,7 +97,7 @@ export function UsagePage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex h-48 items-center justify-center text-muted-foreground">{t('common.loading')}</div>
+            <Skeleton className="h-48 w-full" />
           ) : chartData.length === 0 ? (
             <div className="flex h-48 items-center justify-center text-muted-foreground">{t('analyticsUsage.noUsage')}</div>
           ) : (
@@ -115,9 +116,19 @@ export function UsagePage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-muted-foreground">{t('analyticsUsage.loadingUsage')}</p>
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              ))}
+            </div>
           ) : rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
+              <BarChart3 className="h-10 w-10 text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground">{t('analyticsUsage.noUsage')}</p>
             </div>
           ) : (

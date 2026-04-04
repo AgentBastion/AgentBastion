@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table';
 import { Search, FileText, ChevronLeft, ChevronRight, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface McpLog {
   id: string;
@@ -167,7 +168,18 @@ export function McpLogsPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-8" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-5 w-14 rounded-full" />
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+              ))}
+            </div>
           ) : logs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <FileText className="h-10 w-10 text-muted-foreground mb-3" />
@@ -193,7 +205,7 @@ export function McpLogsPage() {
                     <>
                       <TableRow key={log.id}>
                         <TableCell>
-                          <Button variant="ghost" size="icon-xs"
+                          <Button variant="ghost" size="icon-xs" aria-label="Toggle details"
                             onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}>
                             {expandedRow === log.id
                               ? <ChevronDown className="h-3 w-3" />
