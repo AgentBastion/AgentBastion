@@ -65,8 +65,8 @@ function CodeBlock({ code }: { code: string }) {
       <div className="absolute right-3 top-3">
         <CopyButton text={code} />
       </div>
-      <pre className="overflow-x-auto rounded-lg border bg-muted/50 p-4 font-mono text-sm leading-relaxed">
-        <code>{code}</code>
+      <pre className="max-w-full overflow-x-auto rounded-lg border bg-muted/50 p-4 font-mono text-sm leading-relaxed">
+        <code className="whitespace-pre-wrap break-all">{code}</code>
       </pre>
     </div>
   );
@@ -90,57 +90,6 @@ function InfoBox({ children }: { children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
       {children}
-    </div>
-  );
-}
-
-// ===========================================================================
-// AI Gateway — AI Prompt tab
-// ===========================================================================
-
-function AiGatewayPromptTab({ gatewayUrl }: { gatewayUrl: string }) {
-  const { t } = useTranslation();
-  const prompt = `I need to configure my AI coding tool to use an OpenAI / Anthropic-compatible API gateway called AgentBastion.
-
-Here is the information you need:
-
-Gateway URL: ${gatewayUrl}
-API Key: (ask the user, it starts with "ab-")
-
-AgentBastion supports the following endpoints:
-- OpenAI-compatible: POST ${gatewayUrl}/v1/chat/completions
-- Anthropic Messages: POST ${gatewayUrl}/v1/messages
-- OpenAI Responses: POST ${gatewayUrl}/v1/responses
-- Model list: GET ${gatewayUrl}/v1/models
-
-Configuration rules:
-- For OpenAI-compatible clients (Cursor, Continue, Cline, OpenAI SDK), set the base URL to: ${gatewayUrl}/v1
-- For Anthropic-native clients (Claude Code, Anthropic SDK), set the base URL to: ${gatewayUrl} (no /v1 suffix)
-- The API key should be set as a Bearer token or in the standard API key field
-- Claude Code: set env vars ANTHROPIC_BASE_URL=${gatewayUrl} and ANTHROPIC_API_KEY=<key>
-- Cursor: set in Settings > Models > OpenAI API Key section
-- Continue: edit ~/.continue/config.json, provider "openai", apiBase "${gatewayUrl}/v1"
-- Cline: set in Settings > API Provider > OpenAI Compatible
-
-Please detect which tool I am using and help me configure it step by step.`;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Bot className="h-5 w-5" />
-        <h3 className="text-lg font-semibold">{t('guide.aiPromptTitle')}</h3>
-        <Badge variant="secondary">{t('guide.recommended')}</Badge>
-      </div>
-      <p className="text-sm text-muted-foreground">{t('guide.aiPromptDesc')}</p>
-      <StepList
-        steps={[
-          t('guide.promptStep.copy'),
-          t('guide.promptStep.paste'),
-          t('guide.promptStep.follow'),
-        ]}
-      />
-      <CodeBlock code={prompt} />
-      <InfoBox>{t('guide.promptTip')}</InfoBox>
     </div>
   );
 }
@@ -738,7 +687,7 @@ export function GuidePage() {
   const mcpUrl = gatewayUrl; // MCP endpoint is on the gateway port
 
   return (
-    <div className="space-y-8">
+    <div className="min-w-0 space-y-8">
       {/* Header */}
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold">
@@ -832,12 +781,8 @@ export function GuidePage() {
         {/* AI Gateway tool tabs */}
         <Card>
           <CardContent className="pt-6">
-            <Tabs defaultValue="ai-prompt">
+            <Tabs defaultValue="claude-code">
               <TabsList className="flex-wrap">
-                <TabsTrigger value="ai-prompt">
-                  <Bot className="mr-1 h-3.5 w-3.5" />
-                  {t('guide.aiPrompt')}
-                </TabsTrigger>
                 <TabsTrigger value="claude-code">{t('guide.claudeCode')}</TabsTrigger>
                 <TabsTrigger value="cursor">{t('guide.cursor')}</TabsTrigger>
                 <TabsTrigger value="continue">{t('guide.continue')}</TabsTrigger>
@@ -847,9 +792,6 @@ export function GuidePage() {
                 <TabsTrigger value="curl">{t('guide.curl')}</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="ai-prompt" className="mt-4">
-                <AiGatewayPromptTab gatewayUrl={gatewayUrl} />
-              </TabsContent>
               <TabsContent value="claude-code" className="mt-4">
                 <ClaudeCodeTab gatewayUrl={gatewayUrl} />
               </TabsContent>
