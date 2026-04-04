@@ -46,6 +46,7 @@ const navGroups: NavGroup[] = [
     labelKey: 'nav.overview',
     items: [
       { titleKey: 'nav.dashboard', icon: LayoutDashboard, href: '/' },
+      { titleKey: 'nav.configGuide', icon: BookOpen, href: '/guide' },
     ],
   },
   {
@@ -55,7 +56,6 @@ const navGroups: NavGroup[] = [
       { titleKey: 'nav.models', icon: BrainCircuit, href: '/gateway/models' },
       { titleKey: 'nav.apiKeys', icon: Key, href: '/gateway/api-keys' },
       { titleKey: 'nav.requestLogs', icon: ScrollText, href: '/gateway/logs' },
-      { titleKey: 'nav.configGuide', icon: BookOpen, href: '/gateway/guide' },
     ],
   },
   {

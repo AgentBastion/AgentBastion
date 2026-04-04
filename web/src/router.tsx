@@ -16,7 +16,7 @@ import { ProvidersPage } from '@/routes/gateway/providers';
 import { ModelsPage } from '@/routes/gateway/models';
 import { ApiKeysPage } from '@/routes/gateway/api-keys';
 import { GatewayLogsPage } from '@/routes/gateway/logs';
-import { GuidePage } from '@/routes/gateway/guide';
+import { GuidePage } from '@/routes/guide';
 import { McpServersPage } from '@/routes/mcp/servers';
 import { McpToolsPage } from '@/routes/mcp/tools';
 import { McpLogsPage } from '@/routes/mcp/logs';
@@ -157,7 +157,7 @@ const gatewayLogsRoute = createRoute({
 
 const guideRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/gateway/guide',
+  path: '/guide',
   component: GuidePage,
 });
 

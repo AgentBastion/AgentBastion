@@ -1,0 +1,834 @@
+import { useState, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  BookOpen,
+  Copy,
+  Check,
+  Terminal,
+  Globe,
+  Code2,
+  MousePointerClick,
+  Puzzle,
+  Braces,
+  Server,
+  MonitorSmartphone,
+  Workflow,
+} from 'lucide-react';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function useGatewayUrl(): string {
+  return useMemo(() => {
+    const { protocol, hostname } = window.location;
+    return `${protocol}//${hostname}:3000`;
+  }, []);
+}
+
+function CopyButton({ text }: { text: string }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  const copy = useCallback(() => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [text]);
+
+  return (
+    <Button variant="outline" size="sm" onClick={copy} className="gap-1.5">
+      {copied ? (
+        <>
+          <Check className="h-3.5 w-3.5" />
+          {t('guide.copied')}
+        </>
+      ) : (
+        <>
+          <Copy className="h-3.5 w-3.5" />
+          {t('guide.copyCode')}
+        </>
+      )}
+    </Button>
+  );
+}
+
+function CodeBlock({ code }: { code: string }) {
+  return (
+    <div className="relative">
+      <div className="absolute right-3 top-3">
+        <CopyButton text={code} />
+      </div>
+      <pre className="overflow-x-auto rounded-lg border bg-muted/50 p-4 font-mono text-sm leading-relaxed">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+function StepList({ steps }: { steps: string[] }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-1">
+      <p className="text-sm font-medium text-muted-foreground">{t('guide.steps')}</p>
+      <ol className="list-decimal space-y-1 pl-5 text-sm">
+        {steps.map((step, i) => (
+          <li key={i}>{step}</li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function InfoBox({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
+      {children}
+    </div>
+  );
+}
+
+// ===========================================================================
+// AI Gateway tab contents
+// ===========================================================================
+
+function ClaudeCodeTab({ gatewayUrl }: { gatewayUrl: string }) {
+  const code = `# Set AgentBastion as Anthropic API proxy
+export ANTHROPIC_BASE_URL=${gatewayUrl}
+export ANTHROPIC_API_KEY=ab-your-api-key-here
+
+# Then use claude normally
+claude`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Terminal className="h-5 w-5" />
+        <h3 className="text-lg font-semibold">Claude Code</h3>
+        <Badge variant="outline">Anthropic CLI</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Claude Code connects using the Anthropic native format. Set environment variables to route
+        all requests through AgentBastion.
+      </p>
+      <StepList
+        steps={[
+          'Set ANTHROPIC_BASE_URL to your AgentBastion gateway URL',
+          'Set ANTHROPIC_API_KEY to your ab- prefixed API key',
+          'Run claude as usual — all requests are proxied through the gateway',
+        ]}
+      />
+      <CodeBlock code={code} />
+      <InfoBox>
+        <strong>Endpoint:</strong> /v1/messages (Anthropic native format).
+        AgentBastion translates internally and supports all Claude models.
+      </InfoBox>
+    </div>
+  );
+}
+
+function CursorTab({ gatewayUrl }: { gatewayUrl: string }) {
+  const code = `// In Cursor Settings > Models > OpenAI API Key
+// Base URL: ${gatewayUrl}/v1
+// API Key: ab-your-api-key-here`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <MousePointerClick className="h-5 w-5" />
+        <h3 className="text-lg font-semibold">Cursor</h3>
+        <Badge variant="outline">IDE</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Cursor uses the OpenAI-compatible API format. Configure it in the editor settings.
+      </p>
+      <StepList
+        steps={[
+          'Open Cursor Settings',
+          'Navigate to Models > OpenAI API Key',
+          `Set Base URL to: ${gatewayUrl}/v1`,
+          'Set API Key to your ab- prefixed API key',
+          'Select any model configured in AgentBastion',
+        ]}
+      />
+      <CodeBlock code={code} />
+      <InfoBox>
+        <strong>Endpoint:</strong> /v1/chat/completions (OpenAI-compatible).
+        Supports all models routed through AgentBastion.
+      </InfoBox>
+    </div>
+  );
+}
+
+function ContinueTab({ gatewayUrl }: { gatewayUrl: string }) {
+  const code = `// ~/.continue/config.json
+{
+  "models": [{
+    "title": "AgentBastion Proxy",
+    "provider": "openai",
+    "model": "gpt-4o",
+    "apiBase": "${gatewayUrl}/v1",
+    "apiKey": "ab-your-api-key-here"
+  }]
+}`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Puzzle className="h-5 w-5" />
+        <h3 className="text-lg font-semibold">Continue</h3>
+        <Badge variant="outline">VS Code Extension</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Continue connects as an OpenAI-compatible provider. Edit the config file to point at
+        AgentBastion.
+      </p>
+      <StepList
+        steps={[
+          'Open ~/.continue/config.json (or use the Continue settings UI)',
+          'Add a new model entry with provider set to "openai"',
+          `Set apiBase to: ${gatewayUrl}/v1`,
+          'Set apiKey to your ab- prefixed API key',
+          'Choose any model name configured in AgentBastion',
+        ]}
+      />
+      <CodeBlock code={code} />
+    </div>
+  );
+}
+
+function ClineTab({ gatewayUrl }: { gatewayUrl: string }) {
+  const code = `// Cline Settings > API Provider > OpenAI Compatible
+// Base URL: ${gatewayUrl}/v1
+// API Key: ab-your-api-key-here
+// Model: gpt-4o (or any model configured in AgentBastion)`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Code2 className="h-5 w-5" />
+        <h3 className="text-lg font-semibold">Cline</h3>
+        <Badge variant="outline">VS Code Extension</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Cline supports OpenAI-compatible providers. Configure it through the extension settings.
+      </p>
+      <StepList
+        steps={[
+          'Open Cline Settings in VS Code',
+          'Select API Provider > OpenAI Compatible',
+          `Set Base URL to: ${gatewayUrl}/v1`,
+          'Set API Key to your ab- prefixed API key',
+          'Enter a model name (e.g. gpt-4o) configured in AgentBastion',
+        ]}
+      />
+      <CodeBlock code={code} />
+    </div>
+  );
+}
+
+function OpenAiSdkTab({ gatewayUrl }: { gatewayUrl: string }) {
+  const code = `from openai import OpenAI
+
+client = OpenAI(
+    base_url="${gatewayUrl}/v1",
+    api_key="ab-your-api-key-here",
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello!"}],
+)`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Braces className="h-5 w-5" />
+        <h3 className="text-lg font-semibold">OpenAI SDK</h3>
+        <Badge variant="outline">Python</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Use the official OpenAI Python SDK with AgentBastion as a drop-in replacement.
+      </p>
+      <StepList
+        steps={[
+          'Install the OpenAI SDK: pip install openai',
+          `Set base_url to: ${gatewayUrl}/v1`,
+          'Set api_key to your ab- prefixed API key',
+          'Use any model configured in AgentBastion',
+        ]}
+      />
+      <CodeBlock code={code} />
+    </div>
+  );
+}
+
+function AnthropicSdkTab({ gatewayUrl }: { gatewayUrl: string }) {
+  const code = `import anthropic
+
+client = anthropic.Anthropic(
+    base_url="${gatewayUrl}",
+    api_key="ab-your-api-key-here",
+)
+
+message = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}],
+)`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Braces className="h-5 w-5" />
+        <h3 className="text-lg font-semibold">Anthropic SDK</h3>
+        <Badge variant="outline">Python</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Use the official Anthropic Python SDK by pointing it at AgentBastion.
+      </p>
+      <StepList
+        steps={[
+          'Install the Anthropic SDK: pip install anthropic',
+          `Set base_url to: ${gatewayUrl} (no /v1 suffix)`,
+          'Set api_key to your ab- prefixed API key',
+          'Use any Claude model configured in AgentBastion',
+        ]}
+      />
+      <CodeBlock code={code} />
+      <InfoBox>
+        <strong>Note:</strong> The Anthropic SDK uses the base URL without the /v1 suffix, unlike
+        OpenAI-compatible clients.
+      </InfoBox>
+    </div>
+  );
+}
+
+function CurlTab({ gatewayUrl }: { gatewayUrl: string }) {
+  const openaiCode = `# OpenAI-compatible format
+curl ${gatewayUrl}/v1/chat/completions \\
+  -H "Authorization: Bearer ab-your-api-key-here" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'`;
+
+  const anthropicCode = `# Anthropic Messages format
+curl ${gatewayUrl}/v1/messages \\
+  -H "Authorization: Bearer ab-your-api-key-here" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "claude-sonnet-4-20250514",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Terminal className="h-5 w-5" />
+        <h3 className="text-lg font-semibold">cURL</h3>
+        <Badge variant="outline">Command Line</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Test the gateway directly with cURL. Both OpenAI-compatible and Anthropic message formats
+        are supported.
+      </p>
+      <h4 className="text-sm font-medium">OpenAI-compatible format</h4>
+      <CodeBlock code={openaiCode} />
+      <h4 className="text-sm font-medium">Anthropic Messages format</h4>
+      <CodeBlock code={anthropicCode} />
+    </div>
+  );
+}
+
+// ===========================================================================
+// MCP Gateway tab contents
+// ===========================================================================
+
+function McpClaudeDesktopTab({ mcpUrl }: { mcpUrl: string }) {
+  const { t } = useTranslation();
+  const code = `// claude_desktop_config.json
+// macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
+// Windows: %APPDATA%\\Claude\\claude_desktop_config.json
+{
+  "mcpServers": {
+    "agent-bastion": {
+      "type": "streamableHttp",
+      "url": "${mcpUrl}/mcp",
+      "headers": {
+        "Authorization": "Bearer ab-your-api-key-here"
+      }
+    }
+  }
+}`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <MonitorSmartphone className="h-5 w-5" />
+        <h3 className="text-lg font-semibold">{t('guide.claudeDesktop')}</h3>
+        <Badge variant="outline">Desktop App</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {t('guide.claudeDesktopDesc')}
+      </p>
+      <StepList
+        steps={[
+          t('guide.mcpStep.openConfig'),
+          t('guide.mcpStep.addServer'),
+          t('guide.mcpStep.setApiKey'),
+          t('guide.mcpStep.restartApp'),
+        ]}
+      />
+      <CodeBlock code={code} />
+      <InfoBox>
+        <strong>{t('guide.mcpProtocol')}:</strong> Streamable HTTP — {t('guide.mcpProtocolDesc')}
+      </InfoBox>
+    </div>
+  );
+}
+
+function McpClaudeCodeTab({ mcpUrl }: { mcpUrl: string }) {
+  const { t } = useTranslation();
+  const code = `# Add AgentBastion as an MCP server in Claude Code
+claude mcp add agent-bastion \\
+  --transport streamable-http \\
+  "${mcpUrl}/mcp" \\
+  --header "Authorization: Bearer ab-your-api-key-here"
+
+# List registered MCP servers
+claude mcp list
+
+# Remove if needed
+claude mcp remove agent-bastion`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Terminal className="h-5 w-5" />
+        <h3 className="text-lg font-semibold">Claude Code (MCP)</h3>
+        <Badge variant="outline">CLI</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {t('guide.claudeCodeMcpDesc')}
+      </p>
+      <StepList
+        steps={[
+          t('guide.mcpStep.runAdd'),
+          t('guide.mcpStep.verifyList'),
+          t('guide.mcpStep.useTools'),
+        ]}
+      />
+      <CodeBlock code={code} />
+    </div>
+  );
+}
+
+function McpCursorTab({ mcpUrl }: { mcpUrl: string }) {
+  const { t } = useTranslation();
+  const code = `// .cursor/mcp.json (project-level) or ~/.cursor/mcp.json (global)
+{
+  "mcpServers": {
+    "agent-bastion": {
+      "type": "streamableHttp",
+      "url": "${mcpUrl}/mcp",
+      "headers": {
+        "Authorization": "Bearer ab-your-api-key-here"
+      }
+    }
+  }
+}`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <MousePointerClick className="h-5 w-5" />
+        <h3 className="text-lg font-semibold">Cursor (MCP)</h3>
+        <Badge variant="outline">IDE</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {t('guide.cursorMcpDesc')}
+      </p>
+      <StepList
+        steps={[
+          t('guide.mcpStep.createMcpJson'),
+          t('guide.mcpStep.addServerEntry'),
+          t('guide.mcpStep.setApiKey'),
+          t('guide.mcpStep.restartApp'),
+        ]}
+      />
+      <CodeBlock code={code} />
+    </div>
+  );
+}
+
+function McpClineTab({ mcpUrl }: { mcpUrl: string }) {
+  const { t } = useTranslation();
+  const code = `// VS Code Settings > Cline > MCP Servers
+// Or in cline_mcp_settings.json:
+{
+  "mcpServers": {
+    "agent-bastion": {
+      "type": "streamableHttp",
+      "url": "${mcpUrl}/mcp",
+      "headers": {
+        "Authorization": "Bearer ab-your-api-key-here"
+      }
+    }
+  }
+}`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Code2 className="h-5 w-5" />
+        <h3 className="text-lg font-semibold">Cline (MCP)</h3>
+        <Badge variant="outline">VS Code Extension</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {t('guide.clineMcpDesc')}
+      </p>
+      <StepList
+        steps={[
+          t('guide.mcpStep.openClineSettings'),
+          t('guide.mcpStep.addServerEntry'),
+          t('guide.mcpStep.setApiKey'),
+          t('guide.mcpStep.toolsAppear'),
+        ]}
+      />
+      <CodeBlock code={code} />
+    </div>
+  );
+}
+
+function McpSdkTab({ mcpUrl }: { mcpUrl: string }) {
+  const { t } = useTranslation();
+  const tsCode = `import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+
+const client = new Client({ name: "my-app", version: "1.0.0" });
+
+const transport = new StreamableHTTPClientTransport(
+  new URL("${mcpUrl}/mcp"),
+  {
+    requestInit: {
+      headers: {
+        Authorization: "Bearer ab-your-api-key-here",
+      },
+    },
+  }
+);
+
+await client.connect(transport);
+
+// List available tools
+const tools = await client.listTools();
+console.log(tools);
+
+// Call a tool
+const result = await client.callTool({
+  name: "tool-name",
+  arguments: { key: "value" },
+});`;
+
+  const pyCode = `from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
+
+async with streamablehttp_client(
+    "${mcpUrl}/mcp",
+    headers={"Authorization": "Bearer ab-your-api-key-here"},
+) as (read, write, _):
+    async with ClientSession(read, write) as session:
+        await session.initialize()
+
+        # List available tools
+        tools = await session.list_tools()
+        print(tools)
+
+        # Call a tool
+        result = await session.call_tool("tool-name", arguments={"key": "value"})`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Braces className="h-5 w-5" />
+        <h3 className="text-lg font-semibold">MCP SDK</h3>
+        <Badge variant="outline">TypeScript / Python</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {t('guide.mcpSdkDesc')}
+      </p>
+      <h4 className="text-sm font-medium">TypeScript (Node.js)</h4>
+      <CodeBlock code={tsCode} />
+      <h4 className="text-sm font-medium">Python</h4>
+      <CodeBlock code={pyCode} />
+    </div>
+  );
+}
+
+function McpCurlTab({ mcpUrl }: { mcpUrl: string }) {
+  const { t } = useTranslation();
+  const initCode = `# Initialize MCP session
+curl -X POST ${mcpUrl}/mcp \\
+  -H "Authorization: Bearer ab-your-api-key-here" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": { "name": "curl-test", "version": "1.0.0" }
+    }
+  }'`;
+
+  const toolsCode = `# List available tools (use Mcp-Session-Id from init response)
+curl -X POST ${mcpUrl}/mcp \\
+  -H "Authorization: Bearer ab-your-api-key-here" \\
+  -H "Content-Type: application/json" \\
+  -H "Mcp-Session-Id: <session-id>" \\
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/list",
+    "params": {}
+  }'`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Terminal className="h-5 w-5" />
+        <h3 className="text-lg font-semibold">cURL (MCP)</h3>
+        <Badge variant="outline">Command Line</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {t('guide.mcpCurlDesc')}
+      </p>
+      <h4 className="text-sm font-medium">{t('guide.mcpInitSession')}</h4>
+      <CodeBlock code={initCode} />
+      <h4 className="text-sm font-medium">{t('guide.mcpListTools')}</h4>
+      <CodeBlock code={toolsCode} />
+      <InfoBox>
+        <strong>Mcp-Session-Id:</strong> {t('guide.mcpSessionIdNote')}
+      </InfoBox>
+    </div>
+  );
+}
+
+// ===========================================================================
+// Main page
+// ===========================================================================
+
+export function GuidePage() {
+  const { t } = useTranslation();
+  const gatewayUrl = useGatewayUrl();
+  const mcpUrl = gatewayUrl; // MCP endpoint is on the gateway port
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div>
+        <h1 className="flex items-center gap-2 text-2xl font-bold">
+          <BookOpen className="h-6 w-6" />
+          {t('guide.title')}
+        </h1>
+        <p className="mt-1 text-muted-foreground">{t('guide.subtitle')}</p>
+      </div>
+
+      {/* URL overview cards */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <Globe className="h-4 w-4" />
+              {t('guide.gatewayUrl')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 rounded bg-muted px-3 py-2 font-mono text-sm">
+                {gatewayUrl}
+              </code>
+              <CopyButton text={gatewayUrl} />
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">{t('guide.gatewayUrlDesc')}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <Workflow className="h-4 w-4" />
+              {t('guide.mcpEndpoint')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 rounded bg-muted px-3 py-2 font-mono text-sm">
+                {mcpUrl}/mcp
+              </code>
+              <CopyButton text={`${mcpUrl}/mcp`} />
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">{t('guide.mcpEndpointDesc')}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* API key reminder */}
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+        {t('guide.apiKeyNote')}
+      </div>
+
+      {/* ============================================================= */}
+      {/* AI Gateway Section                                             */}
+      {/* ============================================================= */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <Globe className="h-5 w-5" />
+            {t('guide.aiGatewaySection')}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('guide.aiGatewayDesc')}</p>
+        </div>
+
+        {/* Supported endpoints */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">{t('guide.supportedEndpoints')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <p>
+              <Badge variant="outline" className="mr-2 font-mono text-xs">POST</Badge>
+              {t('guide.openaiEndpoint')}
+            </p>
+            <p>
+              <Badge variant="outline" className="mr-2 font-mono text-xs">POST</Badge>
+              {t('guide.anthropicEndpoint')}
+            </p>
+            <p>
+              <Badge variant="outline" className="mr-2 font-mono text-xs">POST</Badge>
+              {t('guide.responsesEndpoint')}
+            </p>
+            <p>
+              <Badge variant="outline" className="mr-2 font-mono text-xs">GET</Badge>
+              {t('guide.modelsEndpoint')}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* AI Gateway tool tabs */}
+        <Card>
+          <CardContent className="pt-6">
+            <Tabs defaultValue="claude-code">
+              <TabsList className="flex-wrap">
+                <TabsTrigger value="claude-code">{t('guide.claudeCode')}</TabsTrigger>
+                <TabsTrigger value="cursor">{t('guide.cursor')}</TabsTrigger>
+                <TabsTrigger value="continue">{t('guide.continue')}</TabsTrigger>
+                <TabsTrigger value="cline">{t('guide.cline')}</TabsTrigger>
+                <TabsTrigger value="openai-sdk">{t('guide.openaiSdk')}</TabsTrigger>
+                <TabsTrigger value="anthropic-sdk">{t('guide.anthropicSdk')}</TabsTrigger>
+                <TabsTrigger value="curl">{t('guide.curl')}</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="claude-code" className="mt-4">
+                <ClaudeCodeTab gatewayUrl={gatewayUrl} />
+              </TabsContent>
+              <TabsContent value="cursor" className="mt-4">
+                <CursorTab gatewayUrl={gatewayUrl} />
+              </TabsContent>
+              <TabsContent value="continue" className="mt-4">
+                <ContinueTab gatewayUrl={gatewayUrl} />
+              </TabsContent>
+              <TabsContent value="cline" className="mt-4">
+                <ClineTab gatewayUrl={gatewayUrl} />
+              </TabsContent>
+              <TabsContent value="openai-sdk" className="mt-4">
+                <OpenAiSdkTab gatewayUrl={gatewayUrl} />
+              </TabsContent>
+              <TabsContent value="anthropic-sdk" className="mt-4">
+                <AnthropicSdkTab gatewayUrl={gatewayUrl} />
+              </TabsContent>
+              <TabsContent value="curl" className="mt-4">
+                <CurlTab gatewayUrl={gatewayUrl} />
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ============================================================= */}
+      {/* MCP Gateway Section                                            */}
+      {/* ============================================================= */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <Server className="h-5 w-5" />
+            {t('guide.mcpGatewaySection')}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('guide.mcpGatewayDesc')}</p>
+        </div>
+
+        {/* MCP endpoint info */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">{t('guide.mcpInfo')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <p>
+              <Badge variant="outline" className="mr-2 font-mono text-xs">POST</Badge>
+              {t('guide.mcpStreamableEndpoint')}
+            </p>
+            <p>
+              <Badge variant="outline" className="mr-2 font-mono text-xs">DELETE</Badge>
+              {t('guide.mcpSessionEndpoint')}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">{t('guide.mcpVersionNote')}</p>
+          </CardContent>
+        </Card>
+
+        {/* MCP tool tabs */}
+        <Card>
+          <CardContent className="pt-6">
+            <Tabs defaultValue="mcp-claude-desktop">
+              <TabsList className="flex-wrap">
+                <TabsTrigger value="mcp-claude-desktop">{t('guide.claudeDesktop')}</TabsTrigger>
+                <TabsTrigger value="mcp-claude-code">Claude Code</TabsTrigger>
+                <TabsTrigger value="mcp-cursor">Cursor</TabsTrigger>
+                <TabsTrigger value="mcp-cline">Cline</TabsTrigger>
+                <TabsTrigger value="mcp-sdk">{t('guide.mcpSdk')}</TabsTrigger>
+                <TabsTrigger value="mcp-curl">cURL</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="mcp-claude-desktop" className="mt-4">
+                <McpClaudeDesktopTab mcpUrl={mcpUrl} />
+              </TabsContent>
+              <TabsContent value="mcp-claude-code" className="mt-4">
+                <McpClaudeCodeTab mcpUrl={mcpUrl} />
+              </TabsContent>
+              <TabsContent value="mcp-cursor" className="mt-4">
+                <McpCursorTab mcpUrl={mcpUrl} />
+              </TabsContent>
+              <TabsContent value="mcp-cline" className="mt-4">
+                <McpClineTab mcpUrl={mcpUrl} />
+              </TabsContent>
+              <TabsContent value="mcp-sdk" className="mt-4">
+                <McpSdkTab mcpUrl={mcpUrl} />
+              </TabsContent>
+              <TabsContent value="mcp-curl" className="mt-4">
+                <McpCurlTab mcpUrl={mcpUrl} />
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
