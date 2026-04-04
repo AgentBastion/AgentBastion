@@ -24,7 +24,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, LogOut as LogOutIcon, Users as UsersIcon } from 'lucide-react';
+import { Plus, LogOut as LogOutIcon, Users as UsersIcon, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { api, apiPost } from '@/lib/api';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 
@@ -134,7 +135,10 @@ export function UsersPage() {
             </DialogHeader>
             <form onSubmit={handleCreate} className="space-y-4">
               {formError && (
-                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{formError}</div>
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{formError}</AlertDescription>
+                </Alert>
               )}
               <div className="space-y-2">
                 <Label htmlFor="user-email">{t('auth.email')}</Label>
@@ -172,7 +176,10 @@ export function UsersPage() {
       </div>
 
       {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       <Card>
@@ -270,7 +277,10 @@ export function UsersPage() {
         loading={logoutLoading}
       />
       {logoutError && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{logoutError}</div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{logoutError}</AlertDescription>
+        </Alert>
       )}
     </div>
   );

@@ -14,9 +14,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, FileText, ChevronLeft, ChevronRight, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react';
+import { Search, FileText, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 
 interface McpLog {
   id: string;
@@ -237,9 +239,11 @@ export function McpLogsPage() {
                               {log.error_message && <div className="col-span-2 text-destructive"><span className="font-medium">Error:</span> {log.error_message}</div>}
                             </div>
                             {log.detail && (
-                              <pre className="max-h-48 overflow-auto rounded bg-muted p-3 text-xs">
-                                {JSON.stringify(log.detail, null, 2)}
-                              </pre>
+                              <ScrollArea className="max-h-48">
+                                <pre className="rounded bg-muted p-3 text-xs">
+                                  {JSON.stringify(log.detail, null, 2)}
+                                </pre>
+                              </ScrollArea>
                             )}
                           </TableCell>
                         </TableRow>
@@ -253,14 +257,29 @@ export function McpLogsPage() {
                   <span className="text-sm text-muted-foreground">
                     {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} / {total}
                   </span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <Pagination className="mx-0 w-auto">
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          text=""
+                          onClick={(e: React.MouseEvent) => { e.preventDefault(); setPage(page - 1); }}
+                          aria-disabled={page === 0}
+                          className={page === 0 ? 'pointer-events-none opacity-50' : ''}
+                        />
+                      </PaginationItem>
+                      <PaginationItem>
+                        <span className="text-sm px-2">{page + 1} / {totalPages}</span>
+                      </PaginationItem>
+                      <PaginationItem>
+                        <PaginationNext
+                          text=""
+                          onClick={(e: React.MouseEvent) => { e.preventDefault(); setPage(page + 1); }}
+                          aria-disabled={page >= totalPages - 1}
+                          className={page >= totalPages - 1 ? 'pointer-events-none opacity-50' : ''}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
                 </div>
               )}
             </>

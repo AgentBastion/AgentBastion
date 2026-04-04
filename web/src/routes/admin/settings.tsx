@@ -22,7 +22,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Settings, Shield, Key, DollarSign, Database, Lock, Plus, Trash2 } from 'lucide-react';
+import { Settings, Shield, Key, DollarSign, Database, Lock, Plus, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { api, apiPatch } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
@@ -317,15 +318,12 @@ export function SettingsPage() {
       </div>
 
       {statusMsg && (
-        <div
-          className={`rounded-md p-3 text-sm ${
-            statusMsg.type === 'success'
-              ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-              : 'bg-destructive/10 text-destructive'
-          }`}
-        >
-          {statusMsg.text}
-        </div>
+        <Alert variant={statusMsg.type === 'success' ? 'default' : 'destructive'}>
+          {statusMsg.type === 'success'
+            ? <CheckCircle className="h-4 w-4" />
+            : <AlertCircle className="h-4 w-4" />}
+          <AlertDescription>{statusMsg.text}</AlertDescription>
+        </Alert>
       )}
 
       <Tabs defaultValue="general">

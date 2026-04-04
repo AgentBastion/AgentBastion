@@ -1,4 +1,5 @@
 import { AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface ErrorAlertProps {
   message: string;
@@ -8,10 +9,12 @@ interface ErrorAlertProps {
 
 export function ErrorAlert({ message, className, children }: ErrorAlertProps) {
   return (
-    <div className={`rounded-md bg-destructive/10 p-3 text-sm text-destructive flex items-center gap-2 ${className ?? ''}`}>
-      <AlertCircle className="h-4 w-4 shrink-0" />
-      <span className="flex-1">{message}</span>
-      {children}
-    </div>
+    <Alert variant="destructive" className={className}>
+      <AlertCircle className="h-4 w-4" />
+      <AlertDescription className="flex items-center gap-2">
+        <span className="flex-1">{message}</span>
+        {children}
+      </AlertDescription>
+    </Alert>
   );
 }

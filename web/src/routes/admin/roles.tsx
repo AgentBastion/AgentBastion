@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Shield, Plus, Pencil, Trash2, Copy, FileJson } from 'lucide-react';
 import { api, apiPost, apiPatch, apiDelete } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface SystemRole {
   name: string;
@@ -290,14 +291,16 @@ export function RolesPage() {
   };
 
   const PermissionsGrid = ({ selected, onToggle }: { selected: Set<string>; onToggle: (p: string) => void }) => (
-    <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
-      {allPermissions.map((perm) => (
-        <label key={perm} className="flex items-center gap-1.5 text-xs cursor-pointer">
-          <Checkbox checked={selected.has(perm)} onCheckedChange={() => onToggle(perm)} />
-          {perm}
-        </label>
-      ))}
-    </div>
+    <ScrollArea className="max-h-48">
+      <div className="grid grid-cols-2 gap-1.5">
+        {allPermissions.map((perm) => (
+          <label key={perm} className="flex items-center gap-1.5 text-xs cursor-pointer">
+            <Checkbox checked={selected.has(perm)} onCheckedChange={() => onToggle(perm)} />
+            {perm}
+          </label>
+        ))}
+      </div>
+    </ScrollArea>
   );
 
   const ResourceConstraints = ({
@@ -320,14 +323,16 @@ export function RolesPage() {
         <p className="text-xs text-muted-foreground">{t('roles.allowedModelsDesc')}</p>
         {restrictModels ? (
           availableModels.length > 0 ? (
-            <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto">
-              {availableModels.map((model) => (
-                <label key={model} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                  <Checkbox checked={selectedModels.has(model)} onCheckedChange={() => onToggleModel(model)} />
-                  <span className="truncate">{model}</span>
-                </label>
-              ))}
-            </div>
+            <ScrollArea className="max-h-32">
+              <div className="grid grid-cols-2 gap-1.5">
+                {availableModels.map((model) => (
+                  <label key={model} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <Checkbox checked={selectedModels.has(model)} onCheckedChange={() => onToggleModel(model)} />
+                    <span className="truncate">{model}</span>
+                  </label>
+                ))}
+              </div>
+            </ScrollArea>
           ) : (
             <p className="text-xs text-muted-foreground italic">{t('common.noData')}</p>
           )
@@ -344,14 +349,16 @@ export function RolesPage() {
         <p className="text-xs text-muted-foreground">{t('roles.allowedMcpServersDesc')}</p>
         {restrictServers ? (
           availableServers.length > 0 ? (
-            <div className="grid grid-cols-1 gap-1.5 max-h-32 overflow-y-auto">
-              {availableServers.map((srv) => (
-                <label key={srv.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                  <Checkbox checked={selectedServers.has(srv.id)} onCheckedChange={() => onToggleServer(srv.id)} />
-                  {srv.name}
-                </label>
-              ))}
-            </div>
+            <ScrollArea className="max-h-32">
+              <div className="grid grid-cols-1 gap-1.5">
+                {availableServers.map((srv) => (
+                  <label key={srv.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <Checkbox checked={selectedServers.has(srv.id)} onCheckedChange={() => onToggleServer(srv.id)} />
+                    {srv.name}
+                  </label>
+                ))}
+              </div>
+            </ScrollArea>
           ) : (
             <p className="text-xs text-muted-foreground italic">{t('common.noData')}</p>
           )

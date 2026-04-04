@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Lock, LogOut, Trash2, ShieldCheck } from 'lucide-react';
+import { Lock, LogOut, Trash2, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { api, apiPost, apiDelete } from '@/lib/api';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useNavigate } from '@tanstack/react-router';
@@ -173,7 +174,10 @@ export function ProfilePage() {
         <CardContent>
           <form onSubmit={handleChangePassword} className="space-y-4">
             {pwError && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{pwError}</div>
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{pwError}</AlertDescription>
+              </Alert>
             )}
             {pwSuccess && (
               <div className="rounded-md bg-green-500/10 p-3 text-sm text-green-700">{pwSuccess}</div>
@@ -222,7 +226,10 @@ export function ProfilePage() {
                 <div className="space-y-3 rounded-md border p-4">
                   <p className="text-sm">{t('auth.totpDisableConfirm')}</p>
                   {totpDisableError && (
-                    <div className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">{totpDisableError}</div>
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{totpDisableError}</AlertDescription>
+                    </Alert>
                   )}
                   <Input
                     type="password"
@@ -258,7 +265,10 @@ export function ProfilePage() {
               </div>
               <form onSubmit={handleTotpVerifySetup} className="space-y-3">
                 {totpVerifyError && (
-                  <div className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">{totpVerifyError}</div>
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{totpVerifyError}</AlertDescription>
+                  </Alert>
                 )}
                 <div className="space-y-1">
                   <Label>{t('auth.totpCode')}</Label>
@@ -281,7 +291,10 @@ export function ProfilePage() {
           ) : (
             <div className="space-y-3">
               {totpVerifyError && (
-                <div className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">{totpVerifyError}</div>
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{totpVerifyError}</AlertDescription>
+                </Alert>
               )}
               <Button onClick={handleTotpSetup}>{t('auth.totpEnable')}</Button>
             </div>
@@ -320,7 +333,10 @@ export function ProfilePage() {
         </CardHeader>
         <CardContent>
           {actionError && (
-            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-4">{actionError}</div>
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{actionError}</AlertDescription>
+            </Alert>
           )}
           <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
             <Trash2 className="h-4 w-4 mr-2" />

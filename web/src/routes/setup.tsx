@@ -17,7 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Shield, Check, Copy, Globe, ArrowRight, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Shield, Check, Copy, Globe, ArrowRight, ArrowLeft, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 
@@ -459,8 +460,11 @@ export function SetupPage() {
         <Card>
           <form onSubmit={handleFormSubmit}>
             {error && (
-              <div className="mx-6 mt-6 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
+              <div className="mx-6 mt-6">
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
               </div>
             )}
             {renderStepContent()}

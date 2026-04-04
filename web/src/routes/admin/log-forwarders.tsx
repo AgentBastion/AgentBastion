@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { api, apiPost, apiPatch, apiDelete } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertAction } from '@/components/ui/alert';
 
 interface LogForwarder {
   id: string;
@@ -400,12 +401,15 @@ export function LogForwardersPage() {
 
       {/* Error banner */}
       {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive flex items-center justify-between">
-          <span>{error}</span>
-          <Button variant="ghost" size="sm" onClick={() => setError('')}>
-            {t('common.done')}
-          </Button>
-        </div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+          <AlertAction>
+            <Button variant="ghost" size="sm" onClick={() => setError('')}>
+              {t('common.done')}
+            </Button>
+          </AlertAction>
+        </Alert>
       )}
 
       {/* Test result toast */}
@@ -560,7 +564,7 @@ export function LogForwardersPage() {
             {editForwarder && (editForwarder.forwarder_type === 'udp_syslog' || editForwarder.forwarder_type === 'tcp_syslog') && (
               <>
                 <div>
-                  <Label>传输协议</Label>
+                  <Label>{t('logForwarders.transportProtocol')}</Label>
                   <p className="text-sm text-muted-foreground mt-1">{editForwarder.forwarder_type === 'udp_syslog' ? 'UDP' : 'TCP'}</p>
                 </div>
                 <div>

@@ -23,7 +23,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Trash2, Search, Pencil, X, Server } from 'lucide-react';
+import { Plus, Trash2, Search, Pencil, X, Server, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { api, apiPost, apiPatch, apiDelete } from '@/lib/api';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -199,7 +200,10 @@ export function McpServersPage() {
             </DialogHeader>
             <form onSubmit={handleCreate} className="space-y-4">
               {formError && (
-                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{formError}</div>
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{formError}</AlertDescription>
+                </Alert>
               )}
               <div className="space-y-2">
                 <Label htmlFor="mcp-name">{t('common.name')}</Label>
@@ -270,7 +274,10 @@ export function McpServersPage() {
       </div>
 
       {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       <Card>
@@ -357,7 +364,10 @@ export function McpServersPage() {
           </DialogHeader>
           <div className="space-y-4">
             {editError && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{editError}</div>
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{editError}</AlertDescription>
+              </Alert>
             )}
             <div className="space-y-2">
               <Label htmlFor="edit-mcp-name">{t('common.name')}</Label>

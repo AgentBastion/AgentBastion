@@ -4,7 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Wrench } from 'lucide-react';
+import { Wrench, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -63,7 +65,10 @@ export function McpToolsPage() {
       </div>
 
       {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       <div className="flex items-center gap-3">
@@ -113,9 +118,11 @@ export function McpToolsPage() {
                     {tool.input_schema && Object.keys(tool.input_schema).length > 0 && (
                       <div>
                         <Badge variant="outline" className="text-[10px]">{t('mcpTools.inputSchema')}</Badge>
-                        <pre className="mt-1 max-h-24 overflow-auto rounded bg-muted p-2 text-[10px] leading-tight">
-                          {JSON.stringify(tool.input_schema, null, 2)}
-                        </pre>
+                        <ScrollArea className="mt-1 max-h-24">
+                          <pre className="rounded bg-muted p-2 text-[10px] leading-tight">
+                            {JSON.stringify(tool.input_schema, null, 2)}
+                          </pre>
+                        </ScrollArea>
                       </div>
                     )}
                   </CardContent>

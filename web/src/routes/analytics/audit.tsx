@@ -12,9 +12,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, ChevronDown, ChevronRight, ChevronLeft, ChevronRight as ChevronRightNav, FileText } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, FileText, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 
 interface AuditLog {
   id: string;
@@ -127,7 +130,10 @@ export function AuditPage() {
       </Card>
 
       {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       <Card>
@@ -200,9 +206,11 @@ export function AuditPage() {
                             <div className="grid grid-cols-2 gap-2 text-xs p-2">
                               <div><span className="font-medium">User ID:</span> {log.user_id ?? '—'}</div>
                             </div>
-                            <pre className="max-h-48 overflow-auto rounded bg-muted p-3 text-xs">
-                              {JSON.stringify(log.detail, null, 2)}
-                            </pre>
+                            <ScrollArea className="max-h-48">
+                              <pre className="rounded bg-muted p-3 text-xs">
+                                {JSON.stringify(log.detail, null, 2)}
+                              </pre>
+                            </ScrollArea>
                           </TableCell>
                         </TableRow>
                       )}
@@ -215,14 +223,29 @@ export function AuditPage() {
                   <span className="text-sm text-muted-foreground">
                     {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} / {total}
                   </span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
-                      <ChevronRightNav className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <Pagination className="mx-0 w-auto">
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          text=""
+                          onClick={(e: React.MouseEvent) => { e.preventDefault(); setPage(page - 1); }}
+                          aria-disabled={page === 0}
+                          className={page === 0 ? 'pointer-events-none opacity-50' : ''}
+                        />
+                      </PaginationItem>
+                      <PaginationItem>
+                        <span className="text-sm px-2">{page + 1} / {totalPages}</span>
+                      </PaginationItem>
+                      <PaginationItem>
+                        <PaginationNext
+                          text=""
+                          onClick={(e: React.MouseEvent) => { e.preventDefault(); setPage(page + 1); }}
+                          aria-disabled={page >= totalPages - 1}
+                          className={page >= totalPages - 1 ? 'pointer-events-none opacity-50' : ''}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
                 </div>
               )}
             </>

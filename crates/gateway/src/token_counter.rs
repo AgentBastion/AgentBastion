@@ -67,14 +67,14 @@ mod tests {
     fn english_estimation() {
         // "hello world" = 11 chars -> ~3 tokens
         let tokens = estimate_tokens("hello world");
-        assert!(tokens >= 2 && tokens <= 4, "got {tokens}");
+        assert!((2..=4).contains(&tokens), "got {tokens}");
     }
 
     #[test]
     fn cjk_estimation() {
         // 4 CJK chars -> ~2 tokens
         let tokens = estimate_tokens("\u{4F60}\u{597D}\u{4E16}\u{754C}");
-        assert!(tokens >= 2 && tokens <= 4, "got {tokens}");
+        assert!((2..=4).contains(&tokens), "got {tokens}");
     }
 
     #[test]

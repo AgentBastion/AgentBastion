@@ -9,10 +9,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { DollarSign, TrendingUp } from 'lucide-react';
+import { DollarSign, TrendingUp, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { api } from '@/lib/api';
 import { SimpleBarChart } from '@/components/ui/simple-chart';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
 
 interface CostRow {
   model_id: string;
@@ -89,12 +91,7 @@ export function CostsPage() {
               {loading ? <Skeleton className="h-8 w-24" /> : stats.budget_usage_pct != null ? `${budgetPct.toFixed(1)}%` : '—'}
             </div>
             {stats.budget_usage_pct != null && (
-              <div className="mt-2 h-2 w-full rounded-full bg-muted" role="progressbar" aria-valuenow={budgetPct} aria-valuemin={0} aria-valuemax={100}>
-                <div
-                  className="h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${Math.min(budgetPct, 100)}%` }}
-                />
-              </div>
+              <Progress value={Math.min(budgetPct, 100)} className="mt-2" />
             )}
           </CardContent>
         </Card>
@@ -116,7 +113,10 @@ export function CostsPage() {
       </Card>
 
       {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       <Card>
