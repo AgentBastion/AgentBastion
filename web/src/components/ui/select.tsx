@@ -38,28 +38,26 @@ function SelectContent({
   ...props
 }: SelectPrimitive.Popup.Props) {
   return (
-    <SelectPrimitive.Portal>
-      <SelectPrimitive.Positioner>
-        <SelectPrimitive.Popup
-          data-slot="select-content"
-          className={cn(
-            "relative z-[200] max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
-            className,
-          )}
-          {...props}
-        >
-          <SelectPrimitive.ScrollUpArrow className="flex cursor-default items-center justify-center py-1">
-            <ChevronDownIcon className="h-4 w-4 rotate-180" />
-          </SelectPrimitive.ScrollUpArrow>
-          <SelectPrimitive.List className="p-1">
-            {children}
-          </SelectPrimitive.List>
-          <SelectPrimitive.ScrollDownArrow className="flex cursor-default items-center justify-center py-1">
-            <ChevronDownIcon className="h-4 w-4" />
-          </SelectPrimitive.ScrollDownArrow>
-        </SelectPrimitive.Popup>
-      </SelectPrimitive.Positioner>
-    </SelectPrimitive.Portal>
+    <SelectPrimitive.Positioner className="z-[200]">
+      <SelectPrimitive.Popup
+        data-slot="select-content"
+        className={cn(
+          "relative max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
+          className,
+        )}
+        {...props}
+      >
+        <SelectPrimitive.ScrollUpArrow className="flex cursor-default items-center justify-center py-1">
+          <ChevronDownIcon className="h-4 w-4 rotate-180" />
+        </SelectPrimitive.ScrollUpArrow>
+        <SelectPrimitive.List className="p-1">
+          {children}
+        </SelectPrimitive.List>
+        <SelectPrimitive.ScrollDownArrow className="flex cursor-default items-center justify-center py-1">
+          <ChevronDownIcon className="h-4 w-4" />
+        </SelectPrimitive.ScrollDownArrow>
+      </SelectPrimitive.Popup>
+    </SelectPrimitive.Positioner>
   )
 }
 
