@@ -163,19 +163,18 @@ pub async fn login(
                 // If TOTP code didn't match, try recovery codes (constant-time comparison)
                 if !totp_valid {
                     let mut recovery_used = false;
-                    if let Some(ref codes_json) = user.totp_recovery_codes {
-                        if let Ok(mut codes) = serde_json::from_str::<Vec<String>>(codes_json) {
-                            if let Some(pos) = agent_bastion_auth::totp::find_recovery_code(&codes, code) {
-                                codes.remove(pos);
-                                let updated = serde_json::to_string(&codes).unwrap_or_default();
-                                sqlx::query("UPDATE users SET totp_recovery_codes = $1 WHERE id = $2")
-                                    .bind(&updated)
-                                    .bind(user.id)
-                                    .execute(&state.db)
-                                    .await?;
-                                recovery_used = true;
-                            }
-                        }
+                    if let Some(ref codes_json) = user.totp_recovery_codes
+                        && let Ok(mut codes) = serde_json::from_str::<Vec<String>>(codes_json)
+                        && let Some(pos) = agent_bastion_auth::totp::find_recovery_code(&codes, code)
+                    {
+                        codes.remove(pos);
+                        let updated = serde_json::to_string(&codes).unwrap_or_default();
+                        sqlx::query("UPDATE users SET totp_recovery_codes = $1 WHERE id = $2")
+                            .bind(&updated)
+                            .bind(user.id)
+                            .execute(&state.db)
+                            .await?;
+                        recovery_used = true;
                     }
 
                     if !recovery_used {
