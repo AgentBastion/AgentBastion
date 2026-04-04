@@ -10,6 +10,61 @@ use agent_bastion_common::models::Provider;
 use crate::app::AppState;
 use crate::middleware::auth_guard::AuthUser;
 
+/// Headers that must not be overridden by custom_headers.
+const BLOCKED_HEADERS: &[&str] = &[
+    "host",
+    "authorization",
+    "cookie",
+    "set-cookie",
+    "transfer-encoding",
+    "content-length",
+    "connection",
+    "proxy-authorization",
+    "te",
+    "upgrade",
+];
+const MAX_CUSTOM_HEADERS: usize = 20;
+const MAX_HEADER_NAME_LEN: usize = 128;
+const MAX_HEADER_VALUE_LEN: usize = 4096;
+
+pub fn validate_custom_headers(
+    headers: &std::collections::HashMap<String, String>,
+) -> Result<(), AppError> {
+    if headers.len() > MAX_CUSTOM_HEADERS {
+        return Err(AppError::BadRequest(format!(
+            "Too many custom headers (max {MAX_CUSTOM_HEADERS})"
+        )));
+    }
+    for (name, value) in headers {
+        if name.len() > MAX_HEADER_NAME_LEN || value.len() > MAX_HEADER_VALUE_LEN {
+            return Err(AppError::BadRequest(format!(
+                "Header '{name}' exceeds size limit (name max {MAX_HEADER_NAME_LEN}, value max {MAX_HEADER_VALUE_LEN})"
+            )));
+        }
+        if BLOCKED_HEADERS.contains(&name.to_ascii_lowercase().as_str()) {
+            return Err(AppError::BadRequest(format!(
+                "Header '{name}' is not allowed as a custom header"
+            )));
+        }
+        // Validate header name contains only valid characters (RFC 7230)
+        if !name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_.~".contains(&b))
+        {
+            return Err(AppError::BadRequest(format!(
+                "Header name '{name}' contains invalid characters"
+            )));
+        }
+        // Reject header values with CR/LF (HTTP header injection)
+        if value.bytes().any(|b| b == b'\r' || b == b'\n') {
+            return Err(AppError::BadRequest(format!(
+                "Header '{name}' value contains invalid characters"
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_url(url_str: &str) -> Result<(), AppError> {
     let parsed =
         url::Url::parse(url_str).map_err(|_| AppError::BadRequest("Invalid URL".into()))?;
@@ -127,6 +182,14 @@ pub async fn create_provider(
     let encrypted_key = crypto::encrypt(req.api_key.as_bytes(), &key)
         .map_err(|e| AppError::Internal(anyhow::anyhow!("Encryption failed: {e}")))?;
 
+    // Merge custom_headers into config_json
+    let mut config = req.config.unwrap_or(serde_json::json!({}));
+    if let Some(headers) = &req.custom_headers {
+        validate_custom_headers(headers)?;
+        config["custom_headers"] = serde_json::to_value(headers)
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to serialize headers: {e}")))?;
+    }
+
     let provider = sqlx::query_as::<_, Provider>(
         r#"INSERT INTO providers (name, display_name, provider_type, base_url, api_key_encrypted, config_json)
            VALUES ($1, $2, $3, $4, $5, $6) RETURNING *"#,
@@ -136,7 +199,7 @@ pub async fn create_provider(
     .bind(&req.provider_type)
     .bind(&req.base_url)
     .bind(&encrypted_key)
-    .bind(req.config.unwrap_or(serde_json::json!({})))
+    .bind(config)
     .fetch_one(&state.db)
     .await?;
 
@@ -148,6 +211,8 @@ pub struct UpdateProviderRequest {
     pub display_name: Option<String>,
     pub base_url: Option<String>,
     pub api_key: Option<String>,
+    /// Custom HTTP headers forwarded when proxying requests to this provider.
+    pub custom_headers: Option<std::collections::HashMap<String, String>>,
 }
 
 pub async fn update_provider(
@@ -182,14 +247,26 @@ pub async fn update_provider(
         existing.api_key_encrypted.clone()
     };
 
+    // Merge custom_headers into existing config_json
+    let config_json = if let Some(ref headers) = req.custom_headers {
+        validate_custom_headers(headers)?;
+        let mut config = existing.config_json.clone();
+        config["custom_headers"] = serde_json::to_value(headers)
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to serialize headers: {e}")))?;
+        config
+    } else {
+        existing.config_json.clone()
+    };
+
     let updated = sqlx::query_as::<_, Provider>(
-        r#"UPDATE providers SET display_name = $2, base_url = $3, api_key_encrypted = $4
+        r#"UPDATE providers SET display_name = $2, base_url = $3, api_key_encrypted = $4, config_json = $5
            WHERE id = $1 RETURNING *"#,
     )
     .bind(id)
     .bind(display_name)
     .bind(base_url)
     .bind(&api_key_encrypted)
+    .bind(&config_json)
     .fetch_one(&state.db)
     .await?;
 

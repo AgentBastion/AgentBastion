@@ -206,6 +206,8 @@ pub struct AuditConfig {
     pub quickwit_url: Option<String>,
     /// Quickwit index ID (for audit_logs)
     pub quickwit_index: String,
+    /// Optional bearer token for Quickwit authentication
+    pub quickwit_bearer_token: Option<String>,
 }
 
 impl Default for AuditConfig {
@@ -213,6 +215,7 @@ impl Default for AuditConfig {
         Self {
             quickwit_url: None,
             quickwit_index: "audit_logs".into(),
+            quickwit_bearer_token: None,
         }
     }
 }
@@ -630,13 +633,14 @@ async fn flush_to_quickwit(
 
     const MAX_RETRIES: u32 = 3;
     for attempt in 1..=MAX_RETRIES {
-        match client
+        let mut req = client
             .post(&ingest_url)
             .header("Content-Type", "application/x-ndjson")
-            .body(ndjson.clone())
-            .send()
-            .await
-        {
+            .body(ndjson.clone());
+        if let Some(ref token) = config.quickwit_bearer_token {
+            req = req.header("Authorization", format!("Bearer {token}"));
+        }
+        match req.send().await {
             Ok(resp) if resp.status().is_success() => {
                 tracing::debug!("Flushed {} entries to Quickwit index {}", batch.len(), index_id);
                 batch.clear();
@@ -667,7 +671,7 @@ async fn flush_to_quickwit(
 }
 
 /// Initialize the Quickwit index (create if not exists). Call once at startup.
-pub async fn ensure_quickwit_index(quickwit_url: &str, _index_id: &str) {
+pub async fn ensure_quickwit_index(quickwit_url: &str, _index_id: &str, bearer_token: Option<&str>) {
     let client = reqwest::Client::new();
 
     let indices: &[(&str, &str)] = &[
@@ -679,7 +683,11 @@ pub async fn ensure_quickwit_index(quickwit_url: &str, _index_id: &str) {
 
     for (index_id, index_config) in indices {
         let check_url = format!("{}/api/v1/indexes/{}", quickwit_url, index_id);
-        match client.get(&check_url).send().await {
+        let mut req = client.get(&check_url);
+        if let Some(token) = bearer_token {
+            req = req.header("Authorization", format!("Bearer {token}"));
+        }
+        match req.send().await {
             Ok(resp) if resp.status().is_success() => {
                 tracing::info!("Quickwit index '{index_id}' already exists");
                 continue;
@@ -688,13 +696,14 @@ pub async fn ensure_quickwit_index(quickwit_url: &str, _index_id: &str) {
         }
 
         let create_url = format!("{}/api/v1/indexes", quickwit_url);
-        match client
+        let mut req = client
             .post(&create_url)
             .header("Content-Type", "application/yaml")
-            .body(index_config.to_string())
-            .send()
-            .await
-        {
+            .body(index_config.to_string());
+        if let Some(token) = bearer_token {
+            req = req.header("Authorization", format!("Bearer {token}"));
+        }
+        match req.send().await {
             Ok(resp) if resp.status().is_success() => {
                 tracing::info!("Created Quickwit index '{index_id}'");
             }

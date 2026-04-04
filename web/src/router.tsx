@@ -151,7 +151,7 @@ const apiKeysRoute = createRoute({
 
 const gatewayLogsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/gateway/logs',
+  path: '/logs/gateway',
   component: GatewayLogsPage,
 });
 
@@ -175,7 +175,7 @@ const mcpToolsRoute = createRoute({
 
 const mcpLogsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/mcp/logs',
+  path: '/logs/mcp',
   component: McpLogsPage,
 });
 
@@ -193,7 +193,7 @@ const costsRoute = createRoute({
 
 const auditRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/analytics/audit',
+  path: '/logs/audit',
   component: AuditPage,
 });
 
@@ -217,13 +217,13 @@ const settingsRoute = createRoute({
 
 const logForwardersRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/admin/log-forwarders',
+  path: '/logs/forwarders',
   component: LogForwardersPage,
 });
 
 const platformLogsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/admin/platform-logs',
+  path: '/logs/platform',
   component: PlatformLogsPage,
 });
 

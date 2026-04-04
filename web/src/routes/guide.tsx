@@ -687,7 +687,7 @@ export function GuidePage() {
   const mcpUrl = gatewayUrl; // MCP endpoint is on the gateway port
 
   return (
-    <div className="min-w-0 space-y-8">
+    <div className="min-w-0 space-y-6">
       {/* Header */}
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold">
@@ -742,154 +742,154 @@ export function GuidePage() {
       </div>
 
       {/* ============================================================= */}
-      {/* AI Gateway Section                                             */}
+      {/* Top-level tabs: AI Gateway / MCP Gateway                       */}
       {/* ============================================================= */}
-      <div className="space-y-4">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-semibold">
-            <Globe className="h-5 w-5" />
+      <Tabs defaultValue="ai-gateway">
+        <TabsList className="w-full grid grid-cols-2">
+          <TabsTrigger value="ai-gateway" className="gap-2">
+            <Globe className="h-4 w-4" />
             {t('guide.aiGatewaySection')}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t('guide.aiGatewayDesc')}</p>
-        </div>
-
-        {/* Supported endpoints */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">{t('guide.supportedEndpoints')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1 text-sm">
-            <p>
-              <Badge variant="outline" className="mr-2 font-mono text-xs">POST</Badge>
-              {t('guide.openaiEndpoint')}
-            </p>
-            <p>
-              <Badge variant="outline" className="mr-2 font-mono text-xs">POST</Badge>
-              {t('guide.anthropicEndpoint')}
-            </p>
-            <p>
-              <Badge variant="outline" className="mr-2 font-mono text-xs">POST</Badge>
-              {t('guide.responsesEndpoint')}
-            </p>
-            <p>
-              <Badge variant="outline" className="mr-2 font-mono text-xs">GET</Badge>
-              {t('guide.modelsEndpoint')}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* AI Gateway tool tabs */}
-        <Card>
-          <CardContent className="pt-6">
-            <Tabs defaultValue="claude-code">
-              <TabsList className="flex-wrap">
-                <TabsTrigger value="claude-code">{t('guide.claudeCode')}</TabsTrigger>
-                <TabsTrigger value="cursor">{t('guide.cursor')}</TabsTrigger>
-                <TabsTrigger value="continue">{t('guide.continue')}</TabsTrigger>
-                <TabsTrigger value="cline">{t('guide.cline')}</TabsTrigger>
-                <TabsTrigger value="openai-sdk">{t('guide.openaiSdk')}</TabsTrigger>
-                <TabsTrigger value="anthropic-sdk">{t('guide.anthropicSdk')}</TabsTrigger>
-                <TabsTrigger value="curl">{t('guide.curl')}</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="claude-code" className="mt-4">
-                <ClaudeCodeTab gatewayUrl={gatewayUrl} />
-              </TabsContent>
-              <TabsContent value="cursor" className="mt-4">
-                <CursorTab gatewayUrl={gatewayUrl} />
-              </TabsContent>
-              <TabsContent value="continue" className="mt-4">
-                <ContinueTab gatewayUrl={gatewayUrl} />
-              </TabsContent>
-              <TabsContent value="cline" className="mt-4">
-                <ClineTab gatewayUrl={gatewayUrl} />
-              </TabsContent>
-              <TabsContent value="openai-sdk" className="mt-4">
-                <OpenAiSdkTab gatewayUrl={gatewayUrl} />
-              </TabsContent>
-              <TabsContent value="anthropic-sdk" className="mt-4">
-                <AnthropicSdkTab gatewayUrl={gatewayUrl} />
-              </TabsContent>
-              <TabsContent value="curl" className="mt-4">
-                <CurlTab gatewayUrl={gatewayUrl} />
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ============================================================= */}
-      {/* MCP Gateway Section                                            */}
-      {/* ============================================================= */}
-      <div className="space-y-4">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-semibold">
-            <Server className="h-5 w-5" />
+          </TabsTrigger>
+          <TabsTrigger value="mcp-gateway" className="gap-2">
+            <Server className="h-4 w-4" />
             {t('guide.mcpGatewaySection')}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t('guide.mcpGatewayDesc')}</p>
-        </div>
+          </TabsTrigger>
+        </TabsList>
 
-        {/* MCP endpoint info */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">{t('guide.mcpInfo')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1 text-sm">
-            <p>
-              <Badge variant="outline" className="mr-2 font-mono text-xs">POST</Badge>
-              {t('guide.mcpStreamableEndpoint')}
-            </p>
-            <p>
-              <Badge variant="outline" className="mr-2 font-mono text-xs">DELETE</Badge>
-              {t('guide.mcpSessionEndpoint')}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">{t('guide.mcpVersionNote')}</p>
-          </CardContent>
-        </Card>
+        {/* AI Gateway */}
+        <TabsContent value="ai-gateway" className="mt-4 space-y-4">
+          <p className="text-sm text-muted-foreground">{t('guide.aiGatewayDesc')}</p>
 
-        {/* MCP tool tabs */}
-        <Card>
-          <CardContent className="pt-6">
-            <Tabs defaultValue="mcp-prompt">
-              <TabsList className="flex-wrap">
-                <TabsTrigger value="mcp-prompt">
-                  <Bot className="mr-1 h-3.5 w-3.5" />
-                  {t('guide.aiPrompt')}
-                </TabsTrigger>
-                <TabsTrigger value="mcp-claude-desktop">{t('guide.claudeDesktop')}</TabsTrigger>
-                <TabsTrigger value="mcp-claude-code">Claude Code</TabsTrigger>
-                <TabsTrigger value="mcp-cursor">Cursor</TabsTrigger>
-                <TabsTrigger value="mcp-cline">Cline</TabsTrigger>
-                <TabsTrigger value="mcp-sdk">{t('guide.mcpSdk')}</TabsTrigger>
-                <TabsTrigger value="mcp-curl">cURL</TabsTrigger>
-              </TabsList>
+          {/* Supported endpoints */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">{t('guide.supportedEndpoints')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1 text-sm">
+              <p>
+                <Badge variant="outline" className="mr-2 font-mono text-xs">POST</Badge>
+                {t('guide.openaiEndpoint')}
+              </p>
+              <p>
+                <Badge variant="outline" className="mr-2 font-mono text-xs">POST</Badge>
+                {t('guide.anthropicEndpoint')}
+              </p>
+              <p>
+                <Badge variant="outline" className="mr-2 font-mono text-xs">POST</Badge>
+                {t('guide.responsesEndpoint')}
+              </p>
+              <p>
+                <Badge variant="outline" className="mr-2 font-mono text-xs">GET</Badge>
+                {t('guide.modelsEndpoint')}
+              </p>
+            </CardContent>
+          </Card>
 
-              <TabsContent value="mcp-prompt" className="mt-4">
-                <McpPromptTab mcpUrl={mcpUrl} />
-              </TabsContent>
-              <TabsContent value="mcp-claude-desktop" className="mt-4">
-                <McpClaudeDesktopTab mcpUrl={mcpUrl} />
-              </TabsContent>
-              <TabsContent value="mcp-claude-code" className="mt-4">
-                <McpClaudeCodeTab mcpUrl={mcpUrl} />
-              </TabsContent>
-              <TabsContent value="mcp-cursor" className="mt-4">
-                <McpCursorTab mcpUrl={mcpUrl} />
-              </TabsContent>
-              <TabsContent value="mcp-cline" className="mt-4">
-                <McpClineTab mcpUrl={mcpUrl} />
-              </TabsContent>
-              <TabsContent value="mcp-sdk" className="mt-4">
-                <McpSdkTab mcpUrl={mcpUrl} />
-              </TabsContent>
-              <TabsContent value="mcp-curl" className="mt-4">
-                <McpCurlTab mcpUrl={mcpUrl} />
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </div>
+          {/* AI Gateway tool tabs */}
+          <Card>
+            <CardContent className="pt-6">
+              <Tabs defaultValue="claude-code">
+                <TabsList className="flex-wrap">
+                  <TabsTrigger value="claude-code">{t('guide.claudeCode')}</TabsTrigger>
+                  <TabsTrigger value="cursor">{t('guide.cursor')}</TabsTrigger>
+                  <TabsTrigger value="continue">{t('guide.continue')}</TabsTrigger>
+                  <TabsTrigger value="cline">{t('guide.cline')}</TabsTrigger>
+                  <TabsTrigger value="openai-sdk">{t('guide.openaiSdk')}</TabsTrigger>
+                  <TabsTrigger value="anthropic-sdk">{t('guide.anthropicSdk')}</TabsTrigger>
+                  <TabsTrigger value="curl">{t('guide.curl')}</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="claude-code" className="mt-4">
+                  <ClaudeCodeTab gatewayUrl={gatewayUrl} />
+                </TabsContent>
+                <TabsContent value="cursor" className="mt-4">
+                  <CursorTab gatewayUrl={gatewayUrl} />
+                </TabsContent>
+                <TabsContent value="continue" className="mt-4">
+                  <ContinueTab gatewayUrl={gatewayUrl} />
+                </TabsContent>
+                <TabsContent value="cline" className="mt-4">
+                  <ClineTab gatewayUrl={gatewayUrl} />
+                </TabsContent>
+                <TabsContent value="openai-sdk" className="mt-4">
+                  <OpenAiSdkTab gatewayUrl={gatewayUrl} />
+                </TabsContent>
+                <TabsContent value="anthropic-sdk" className="mt-4">
+                  <AnthropicSdkTab gatewayUrl={gatewayUrl} />
+                </TabsContent>
+                <TabsContent value="curl" className="mt-4">
+                  <CurlTab gatewayUrl={gatewayUrl} />
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* MCP Gateway */}
+        <TabsContent value="mcp-gateway" className="mt-4 space-y-4">
+          <p className="text-sm text-muted-foreground">{t('guide.mcpGatewayDesc')}</p>
+
+          {/* MCP endpoint info */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">{t('guide.mcpInfo')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1 text-sm">
+              <p>
+                <Badge variant="outline" className="mr-2 font-mono text-xs">POST</Badge>
+                {t('guide.mcpStreamableEndpoint')}
+              </p>
+              <p>
+                <Badge variant="outline" className="mr-2 font-mono text-xs">DELETE</Badge>
+                {t('guide.mcpSessionEndpoint')}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">{t('guide.mcpVersionNote')}</p>
+            </CardContent>
+          </Card>
+
+          {/* MCP tool tabs */}
+          <Card>
+            <CardContent className="pt-6">
+              <Tabs defaultValue="mcp-prompt">
+                <TabsList className="flex-wrap">
+                  <TabsTrigger value="mcp-prompt">
+                    <Bot className="mr-1 h-3.5 w-3.5" />
+                    {t('guide.aiPrompt')}
+                  </TabsTrigger>
+                  <TabsTrigger value="mcp-claude-desktop">{t('guide.claudeDesktop')}</TabsTrigger>
+                  <TabsTrigger value="mcp-claude-code">Claude Code</TabsTrigger>
+                  <TabsTrigger value="mcp-cursor">Cursor</TabsTrigger>
+                  <TabsTrigger value="mcp-cline">Cline</TabsTrigger>
+                  <TabsTrigger value="mcp-sdk">{t('guide.mcpSdk')}</TabsTrigger>
+                  <TabsTrigger value="mcp-curl">cURL</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="mcp-prompt" className="mt-4">
+                  <McpPromptTab mcpUrl={mcpUrl} />
+                </TabsContent>
+                <TabsContent value="mcp-claude-desktop" className="mt-4">
+                  <McpClaudeDesktopTab mcpUrl={mcpUrl} />
+                </TabsContent>
+                <TabsContent value="mcp-claude-code" className="mt-4">
+                  <McpClaudeCodeTab mcpUrl={mcpUrl} />
+                </TabsContent>
+                <TabsContent value="mcp-cursor" className="mt-4">
+                  <McpCursorTab mcpUrl={mcpUrl} />
+                </TabsContent>
+                <TabsContent value="mcp-cline" className="mt-4">
+                  <McpClineTab mcpUrl={mcpUrl} />
+                </TabsContent>
+                <TabsContent value="mcp-sdk" className="mt-4">
+                  <McpSdkTab mcpUrl={mcpUrl} />
+                </TabsContent>
+                <TabsContent value="mcp-curl" className="mt-4">
+                  <McpCurlTab mcpUrl={mcpUrl} />
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

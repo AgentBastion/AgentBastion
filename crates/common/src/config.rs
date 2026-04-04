@@ -18,6 +18,7 @@ pub struct AppConfig {
     // Quickwit (audit log search engine)
     pub quickwit_url: Option<String>,
     pub quickwit_index: String,
+    pub quickwit_bearer_token: Option<String>,
 
     // OIDC / SSO (e.g. Zitadel)
     pub oidc_issuer_url: Option<String>,
@@ -55,6 +56,7 @@ impl AppConfig {
             // Quickwit
             quickwit_url: std::env::var("QUICKWIT_URL").ok(),
             quickwit_index: std::env::var("QUICKWIT_INDEX").unwrap_or_else(|_| "audit_logs".into()),
+            quickwit_bearer_token: std::env::var("QUICKWIT_BEARER_TOKEN").ok(),
 
             // OIDC
             oidc_issuer_url: std::env::var("OIDC_ISSUER_URL").ok(),
@@ -86,6 +88,23 @@ impl AppConfig {
             return Err("JWT_SECRET must not consist of a single repeated character".into());
         }
 
+        // Redis must have a password
+        if !self.redis_url.contains("://default:") && !self.redis_url.contains("://redis:") {
+            // Accept password in userinfo or query param
+            let has_password = self.redis_url.contains('@')
+                && !self.redis_url.starts_with("redis://@")
+                && !self.redis_url.starts_with("redis://localhost")
+                && !self.redis_url.starts_with("redis://127.0.0.1");
+            if !has_password {
+                tracing::warn!("REDIS_URL does not appear to contain a password — ensure Redis requires authentication in production");
+            }
+        }
+
+        // Quickwit auth warning
+        if self.quickwit_url.is_some() && self.quickwit_bearer_token.is_none() {
+            tracing::warn!("QUICKWIT_URL is set without QUICKWIT_BEARER_TOKEN — Quickwit has no authentication. Ensure it is only accessible on a private network");
+        }
+
         Ok(())
     }
 
@@ -110,6 +129,7 @@ impl AppConfig {
             cors_origins: vec!["http://localhost".into()],
             quickwit_url: None,
             quickwit_index: "test".into(),
+            quickwit_bearer_token: None,
             oidc_issuer_url: None,
             oidc_client_id: None,
             oidc_client_secret: None,
@@ -121,6 +141,7 @@ impl AppConfig {
         crate::audit::AuditConfig {
             quickwit_url: self.quickwit_url.clone(),
             quickwit_index: self.quickwit_index.clone(),
+            quickwit_bearer_token: self.quickwit_bearer_token.clone(),
         }
     }
 

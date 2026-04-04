@@ -82,7 +82,13 @@ pub async fn api_health_check(State(state): State<AppState>) -> Response {
     // Quickwit
     let (qw_ok, qw_latency) = if let Some(ref url) = state.config.quickwit_url {
         let qw_start = std::time::Instant::now();
-        let ok = reqwest::get(format!("{url}/health/readyz"))
+        let client = reqwest::Client::new();
+        let mut req = client.get(format!("{url}/health/readyz"));
+        if let Some(ref token) = state.config.quickwit_bearer_token {
+            req = req.header("Authorization", format!("Bearer {token}"));
+        }
+        let ok = req
+            .send()
             .await
             .map(|r| r.status().is_success())
             .unwrap_or(false);

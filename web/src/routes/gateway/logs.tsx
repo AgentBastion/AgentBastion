@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -12,17 +13,22 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, FileText, ChevronLeft, ChevronRight, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface GatewayLog {
   id: string;
+  user_id: string | null;
+  api_key_id: string | null;
   model_id: string;
+  provider: string | null;
   input_tokens: number;
   output_tokens: number;
   cost_usd: string;
   latency_ms: number | null;
   status_code: number | null;
+  detail: Record<string, unknown> | null;
+  ip_address: string | null;
   created_at: string;
 }
 
@@ -38,14 +44,31 @@ export function GatewayLogsPage() {
   const [logs, setLogs] = useState<GatewayLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+
+  // Filters
+  const [query, setQuery] = useState('');
+  const [model, setModel] = useState('');
+  const [provider, setProvider] = useState('');
+  const [userId, setUserId] = useState('');
+  const [statusCode, setStatusCode] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [sortBy, setSortBy] = useState('created_at');
 
   const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search) params.set('model', search);
+      if (query) params.set('q', query);
+      if (model) params.set('model', model);
+      if (provider) params.set('provider', provider);
+      if (userId) params.set('user_id', userId);
+      if (statusCode) params.set('status_code', statusCode);
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      if (sortBy !== 'created_at') params.set('sort', sortBy);
       params.set('limit', String(PAGE_SIZE));
       params.set('offset', String(page * PAGE_SIZE));
       const data = await api<GatewayLogsResponse>(`/api/gateway/logs?${params}`);
@@ -57,16 +80,14 @@ export function GatewayLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, page]);
+  }, [query, model, provider, userId, statusCode, from, to, sortBy, page]);
 
-  useEffect(() => {
-    loadLogs();
-  }, [loadLogs]);
-
-  // Reset to page 0 when search changes
-  useEffect(() => { setPage(0); }, [search]);
+  useEffect(() => { loadLogs(); }, [loadLogs]);
+  useEffect(() => { setPage(0); }, [query, model, provider, userId, statusCode, from, to, sortBy]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  const handleSearch = () => { setPage(0); loadLogs(); };
 
   const statusBadge = (code: number | null) => {
     if (!code) return <Badge variant="outline">—</Badge>;
@@ -77,18 +98,62 @@ export function GatewayLogsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t('logs.title')}</h1>
-          <p className="text-muted-foreground">{t('logs.subtitle')}</p>
-        </div>
-        <Input
-          placeholder={t('logs.filterModel')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-64"
-        />
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('logs.title')}</h1>
+        <p className="text-muted-foreground">{t('logs.subtitle')}</p>
       </div>
+
+      {/* Search filters */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <Label className="text-xs">{t('common.search')}</Label>
+              <Input placeholder={t('logs.searchPlaceholder')} value={query} onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()} />
+            </div>
+            <div>
+              <Label className="text-xs">{t('logs.model')}</Label>
+              <Input placeholder="gpt-4o" value={model} onChange={(e) => setModel(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">{t('logs.provider')}</Label>
+              <Input placeholder="openai" value={provider} onChange={(e) => setProvider(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">{t('logs.statusCode')}</Label>
+              <Input placeholder="200" value={statusCode} onChange={(e) => setStatusCode(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">{t('logs.userId')}</Label>
+              <Input placeholder="UUID" value={userId} onChange={(e) => setUserId(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">{t('logs.dateFrom')}</Label>
+              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">{t('logs.dateTo')}</Label>
+              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">{t('logs.sortBy')}</Label>
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm">
+                <option value="created_at">{t('logs.timestamp')}</option>
+                <option value="cost_usd">{t('logs.cost')}</option>
+                <option value="latency_ms">{t('logs.latency')}</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <Button variant="outline" onClick={handleSearch}>
+              <Search className="mr-1.5 h-4 w-4" />
+              {t('common.search')}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -112,8 +177,10 @@ export function GatewayLogsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8" />
                     <TableHead>{t('logs.timestamp')}</TableHead>
                     <TableHead>{t('logs.model')}</TableHead>
+                    <TableHead>{t('logs.provider')}</TableHead>
                     <TableHead className="text-right">{t('logs.tokensIn')}</TableHead>
                     <TableHead className="text-right">{t('logs.tokensOut')}</TableHead>
                     <TableHead className="text-right">{t('logs.cost')}</TableHead>
@@ -123,19 +190,46 @@ export function GatewayLogsPage() {
                 </TableHeader>
                 <TableBody>
                   {logs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {new Date(log.created_at).toLocaleString()}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">{log.model_id}</TableCell>
-                      <TableCell className="text-right tabular-nums">{log.input_tokens.toLocaleString()}</TableCell>
-                      <TableCell className="text-right tabular-nums">{log.output_tokens.toLocaleString()}</TableCell>
-                      <TableCell className="text-right tabular-nums">${parseFloat(log.cost_usd).toFixed(4)}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {log.latency_ms != null ? `${log.latency_ms}ms` : '—'}
-                      </TableCell>
-                      <TableCell>{statusBadge(log.status_code)}</TableCell>
-                    </TableRow>
+                    <>
+                      <TableRow key={log.id}>
+                        <TableCell>
+                          <Button variant="ghost" size="icon-xs"
+                            onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}>
+                            {expandedRow === log.id
+                              ? <ChevronDown className="h-3 w-3" />
+                              : <ChevronRightIcon className="h-3 w-3" />}
+                          </Button>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {new Date(log.created_at).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{log.model_id}</TableCell>
+                        <TableCell className="text-sm">{log.provider ?? '—'}</TableCell>
+                        <TableCell className="text-right tabular-nums">{log.input_tokens.toLocaleString()}</TableCell>
+                        <TableCell className="text-right tabular-nums">{log.output_tokens.toLocaleString()}</TableCell>
+                        <TableCell className="text-right tabular-nums">${parseFloat(log.cost_usd).toFixed(4)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {log.latency_ms != null ? `${log.latency_ms}ms` : '—'}
+                        </TableCell>
+                        <TableCell>{statusBadge(log.status_code)}</TableCell>
+                      </TableRow>
+                      {expandedRow === log.id && (
+                        <TableRow key={`${log.id}-detail`}>
+                          <TableCell colSpan={9}>
+                            <div className="grid grid-cols-3 gap-2 text-xs p-2">
+                              <div><span className="font-medium">User:</span> {log.user_id ?? '—'}</div>
+                              <div><span className="font-medium">API Key:</span> {log.api_key_id ?? '—'}</div>
+                              <div><span className="font-medium">IP:</span> {log.ip_address ?? '—'}</div>
+                            </div>
+                            {log.detail && (
+                              <pre className="max-h-48 overflow-auto rounded bg-muted p-3 text-xs">
+                                {JSON.stringify(log.detail, null, 2)}
+                              </pre>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
                   ))}
                 </TableBody>
               </Table>

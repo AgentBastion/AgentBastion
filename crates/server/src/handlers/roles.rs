@@ -3,6 +3,7 @@ use axum::extract::{Path, State};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use agent_bastion_auth::rbac;
 use agent_bastion_common::errors::AppError;
 
 use crate::app::AppState;
@@ -38,6 +39,12 @@ pub struct RoleResponse {
     pub description: Option<String>,
     pub is_system: bool,
     pub permissions: Vec<String>,
+    /// Allowed model IDs. `null` = unrestricted (all models).
+    pub allowed_models: Option<Vec<String>>,
+    /// Allowed MCP server UUIDs. `null` = unrestricted (all servers).
+    pub allowed_mcp_servers: Option<Vec<Uuid>>,
+    /// AWS IAM-style policy document JSON. `null` = use legacy permissions.
+    pub policy_document: Option<serde_json::Value>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -53,8 +60,8 @@ pub async fn list_roles(
     _auth_user: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<RolesListResponse>, AppError> {
-    let rows = sqlx::query_as::<_, (Uuid, String, Option<String>, bool, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)>(
-        "SELECT id, name, description, is_system, created_at, updated_at FROM custom_roles ORDER BY is_system DESC, name ASC",
+    let rows = sqlx::query_as::<_, (Uuid, String, Option<String>, bool, Option<Vec<String>>, Option<Vec<Uuid>>, Option<serde_json::Value>, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)>(
+        "SELECT id, name, description, is_system, allowed_models, allowed_mcp_servers, policy_document, created_at, updated_at FROM custom_roles ORDER BY is_system DESC, name ASC",
     )
     .fetch_all(&state.db)
     .await?;
@@ -76,12 +83,15 @@ pub async fn list_roles(
 
     let items = rows
         .into_iter()
-        .map(|(id, name, description, is_system, created_at, updated_at)| RoleResponse {
+        .map(|(id, name, description, is_system, allowed_models, allowed_mcp_servers, policy_document, created_at, updated_at)| RoleResponse {
             id,
             name,
             description,
             is_system,
             permissions: perm_map.remove(&id).unwrap_or_default(),
+            allowed_models,
+            allowed_mcp_servers,
+            policy_document,
             created_at: created_at.to_rfc3339(),
             updated_at: updated_at.to_rfc3339(),
         })
@@ -97,6 +107,12 @@ pub struct CreateRoleRequest {
     pub name: String,
     pub description: Option<String>,
     pub permissions: Vec<String>,
+    /// Restrict to specific model IDs. `null` or absent = unrestricted.
+    pub allowed_models: Option<Vec<String>>,
+    /// Restrict to specific MCP server UUIDs. `null` or absent = unrestricted.
+    pub allowed_mcp_servers: Option<Vec<Uuid>>,
+    /// AWS IAM-style policy document. When provided, takes precedence over permissions.
+    pub policy_document: Option<serde_json::Value>,
 }
 
 pub async fn create_role(
@@ -111,6 +127,12 @@ pub async fn create_role(
         ));
     }
 
+    // Validate policy document if provided
+    if let Some(ref doc) = payload.policy_document {
+        rbac::validate_policy_document(doc)
+            .map_err(AppError::BadRequest)?;
+    }
+
     // Validate permissions
     for perm in &payload.permissions {
         if !ALL_PERMISSIONS.contains(&perm.as_str()) {
@@ -123,18 +145,27 @@ pub async fn create_role(
     let mut tx = state.db.begin().await?;
 
     let row = sqlx::query_as::<_, (Uuid, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)>(
-        "INSERT INTO custom_roles (name, description, created_by) VALUES ($1, $2, $3) RETURNING id, created_at, updated_at",
+        "INSERT INTO custom_roles (name, description, created_by, allowed_models, allowed_mcp_servers, policy_document) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at, updated_at",
     )
     .bind(name)
     .bind(&payload.description)
     .bind(auth_user.claims.sub)
+    .bind(&payload.allowed_models)
+    .bind(&payload.allowed_mcp_servers)
+    .bind(&payload.policy_document)
     .fetch_one(&mut *tx)
     .await
-    .map_err(|e| match e {
-        sqlx::Error::Database(ref db_err) if db_err.constraint() == Some("custom_roles_name_key") => {
+    .map_err(|e| match &e {
+        sqlx::Error::Database(db_err) if db_err.constraint() == Some("custom_roles_name_key") => {
             AppError::BadRequest(format!("Role name '{name}' already exists"))
         }
-        _ => AppError::from(e),
+        sqlx::Error::Database(db_err) if db_err.constraint() == Some("custom_roles_created_by_fkey") => {
+            AppError::BadRequest("Current user not found — cannot create role".into())
+        }
+        _ => {
+            tracing::error!("Failed to create custom role: {e:?}");
+            AppError::from(e)
+        }
     })?;
 
     for perm in &payload.permissions {
@@ -153,6 +184,9 @@ pub async fn create_role(
         description: payload.description,
         is_system: false,
         permissions: payload.permissions,
+        allowed_models: payload.allowed_models,
+        allowed_mcp_servers: payload.allowed_mcp_servers,
+        policy_document: payload.policy_document,
         created_at: row.1.to_rfc3339(),
         updated_at: row.2.to_rfc3339(),
     }))
@@ -165,6 +199,9 @@ pub struct UpdateRoleRequest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub permissions: Option<Vec<String>>,
+    pub allowed_models: Option<Vec<String>>,
+    pub allowed_mcp_servers: Option<Vec<Uuid>>,
+    pub policy_document: Option<serde_json::Value>,
 }
 
 pub async fn update_role(
@@ -184,6 +221,12 @@ pub async fn update_role(
 
     if existing.0 {
         return Err(AppError::BadRequest("Cannot modify system roles".into()));
+    }
+
+    // Validate policy document if provided
+    if let Some(ref doc) = payload.policy_document {
+        rbac::validate_policy_document(doc)
+            .map_err(AppError::BadRequest)?;
     }
 
     if let Some(ref perms) = payload.permissions {
@@ -220,6 +263,33 @@ pub async fn update_role(
             .await?;
     }
 
+    // Update allowed_models (explicit null clears restriction)
+    if payload.allowed_models.is_some() {
+        sqlx::query("UPDATE custom_roles SET allowed_models = $1, updated_at = now() WHERE id = $2")
+            .bind(&payload.allowed_models)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    // Update allowed_mcp_servers
+    if payload.allowed_mcp_servers.is_some() {
+        sqlx::query("UPDATE custom_roles SET allowed_mcp_servers = $1, updated_at = now() WHERE id = $2")
+            .bind(&payload.allowed_mcp_servers)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    // Update policy_document
+    if payload.policy_document.is_some() {
+        sqlx::query("UPDATE custom_roles SET policy_document = $1, updated_at = now() WHERE id = $2")
+            .bind(&payload.policy_document)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
     if let Some(ref perms) = payload.permissions {
         sqlx::query("DELETE FROM custom_role_permissions WHERE custom_role_id = $1")
             .bind(id)
@@ -241,8 +311,8 @@ pub async fn update_role(
     tx.commit().await?;
 
     // Fetch updated role
-    let row = sqlx::query_as::<_, (Uuid, String, Option<String>, bool, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)>(
-        "SELECT id, name, description, is_system, created_at, updated_at FROM custom_roles WHERE id = $1",
+    let row = sqlx::query_as::<_, (Uuid, String, Option<String>, bool, Option<Vec<String>>, Option<Vec<Uuid>>, Option<serde_json::Value>, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)>(
+        "SELECT id, name, description, is_system, allowed_models, allowed_mcp_servers, policy_document, created_at, updated_at FROM custom_roles WHERE id = $1",
     )
     .bind(id)
     .fetch_one(&state.db)
@@ -264,8 +334,11 @@ pub async fn update_role(
         description: row.2,
         is_system: row.3,
         permissions: perms,
-        created_at: row.4.to_rfc3339(),
-        updated_at: row.5.to_rfc3339(),
+        allowed_models: row.4,
+        allowed_mcp_servers: row.5,
+        policy_document: row.6,
+        created_at: row.7.to_rfc3339(),
+        updated_at: row.8.to_rfc3339(),
     }))
 }
 

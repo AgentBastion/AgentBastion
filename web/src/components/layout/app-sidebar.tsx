@@ -55,7 +55,6 @@ const navGroups: NavGroup[] = [
       { titleKey: 'nav.providers', icon: Plug, href: '/gateway/providers' },
       { titleKey: 'nav.models', icon: BrainCircuit, href: '/gateway/models' },
       { titleKey: 'nav.apiKeys', icon: Key, href: '/gateway/api-keys' },
-      { titleKey: 'nav.requestLogs', icon: ScrollText, href: '/gateway/logs' },
     ],
   },
   {
@@ -63,7 +62,6 @@ const navGroups: NavGroup[] = [
     items: [
       { titleKey: 'nav.mcpServers', icon: Server, href: '/mcp/servers' },
       { titleKey: 'nav.tools', icon: Wrench, href: '/mcp/tools' },
-      { titleKey: 'nav.mcpLogs', icon: ScrollText, href: '/mcp/logs' },
     ],
   },
   {
@@ -71,7 +69,16 @@ const navGroups: NavGroup[] = [
     items: [
       { titleKey: 'nav.usage', icon: BarChart3, href: '/analytics/usage' },
       { titleKey: 'nav.costs', icon: DollarSign, href: '/analytics/costs' },
-      { titleKey: 'nav.auditLogs', icon: ClipboardList, href: '/analytics/audit' },
+    ],
+  },
+  {
+    labelKey: 'nav.logs',
+    items: [
+      { titleKey: 'nav.requestLogs', icon: ScrollText, href: '/logs/gateway' },
+      { titleKey: 'nav.mcpLogs', icon: ScrollText, href: '/logs/mcp' },
+      { titleKey: 'nav.auditLogs', icon: ClipboardList, href: '/logs/audit' },
+      { titleKey: 'nav.platformLogs', icon: ClipboardList, href: '/logs/platform' },
+      { titleKey: 'nav.logForwarders', icon: Forward, href: '/logs/forwarders' },
     ],
   },
   {
@@ -79,8 +86,6 @@ const navGroups: NavGroup[] = [
     items: [
       { titleKey: 'nav.users', icon: Users, href: '/admin/users' },
       { titleKey: 'nav.roles', icon: Shield, href: '/admin/roles' },
-      { titleKey: 'nav.platformLogs', icon: ClipboardList, href: '/admin/platform-logs' },
-      { titleKey: 'nav.logForwarders', icon: Forward, href: '/admin/log-forwarders' },
       { titleKey: 'nav.settings', icon: Settings, href: '/admin/settings' },
     ],
   },

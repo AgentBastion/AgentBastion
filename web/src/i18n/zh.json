@@ -26,7 +26,9 @@
     "copied": "已复制！",
     "done": "完成",
     "edit": "编辑",
-    "total": "总计"
+    "total": "总计",
+    "all": "全部",
+    "none": "无"
   },
   "nav": {
     "dashboard": "仪表盘",
@@ -45,6 +47,7 @@
     "costs": "成本",
     "auditLogs": "审计日志",
     "admin": "管理",
+    "logs": "日志",
     "users": "用户",
     "roles": "角色",
     "settings": "设置",
@@ -140,7 +143,10 @@
     "created": "创建时间",
     "editProvider": "编辑提供商",
     "editDescription": "更新提供商设置。",
-    "apiKeyUnchanged": "留空以保留当前密钥"
+    "apiKeyUnchanged": "留空以保留当前密钥",
+    "customHeaders": "自定义请求头",
+    "customHeadersDesc": "随请求转发的自定义 HTTP 头",
+    "addHeader": "添加请求头"
   },
   "apiKeys": {
     "title": "API 密钥",
@@ -234,7 +240,8 @@
     "placeholder": "MCP 调用日志将在第 5 阶段提供。",
     "placeholderHint": "日志将包含工具调用、耗时和错误追踪。",
     "noLogs": "暂无 MCP 调用日志。",
-    "noLogsHint": "MCP 工具被调用后日志将显示在此处。"
+    "noLogsHint": "MCP 工具被调用后日志将显示在此处。",
+    "searchPlaceholder": "搜索 MCP 日志..."
   },
   "analyticsUsage": {
     "title": "用量分析",
@@ -322,7 +329,20 @@
     "addRoleDescription": "创建具有特定权限的自定义角色。",
     "editRole": "编辑角色",
     "noCustomRoles": "尚未创建自定义角色。",
-    "deleteConfirm": "确定要删除此角色吗？"
+    "deleteConfirm": "确定要删除此角色吗？",
+    "allowedModels": "允许的模型",
+    "allowedModelsDesc": "限制此角色可使用的 AI 模型。留空表示允许所有模型。",
+    "allowedMcpServers": "允许的 MCP 服务器",
+    "allowedMcpServersDesc": "限制此角色可访问的 MCP 服务器。留空表示允许所有服务器。",
+    "allModels": "所有模型（无限制）",
+    "allServers": "所有服务器（无限制）",
+    "resourceConstraints": "资源约束",
+    "simpleMode": "简单模式",
+    "policyMode": "策略模式",
+    "policyTemplates": "策略模板",
+    "policyDocument": "策略文档",
+    "policyDocumentDesc": "AWS IAM 风格的 JSON 策略文档，用于细粒度访问控制",
+    "invalidJson": "JSON 格式无效"
   },
   "settingsPage": {
     "title": "设置",
@@ -400,7 +420,14 @@
     "placeholder": "请求日志将在第 5 阶段提供。",
     "placeholderHint": "日志将包含令牌使用、成本追踪和延迟指标。",
     "filterModel": "按模型筛选...",
-    "noLogs": "暂无网关请求日志。"
+    "noLogs": "暂无网关请求日志。",
+    "searchPlaceholder": "搜索日志...",
+    "dateFrom": "开始日期",
+    "dateTo": "结束日期",
+    "sortBy": "排序",
+    "provider": "提供商",
+    "statusCode": "状态码",
+    "userId": "用户ID"
   },
   "logForwarders": {
     "title": "日志转发",

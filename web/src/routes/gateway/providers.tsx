@@ -22,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Trash2, Pencil } from 'lucide-react';
+import { Plus, Trash2, Pencil, X } from 'lucide-react';
 import { api, apiPost, apiPatch, apiDelete } from '@/lib/api';
 
 interface Provider {
@@ -32,6 +32,7 @@ interface Provider {
   provider_type: string;
   base_url: string;
   is_active: boolean;
+  config_json?: { custom_headers?: Record<string, string> };
   created_at: string;
 }
 
@@ -58,6 +59,7 @@ export function ProvidersPage() {
   const [providerType, setProviderType] = useState('openai');
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [customHeaders, setCustomHeaders] = useState<[string, string][]>([]);
 
   // Edit state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -65,6 +67,7 @@ export function ProvidersPage() {
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editBaseUrl, setEditBaseUrl] = useState('');
   const [editApiKey, setEditApiKey] = useState('');
+  const [editCustomHeaders, setEditCustomHeaders] = useState<[string, string][]>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
 
@@ -87,6 +90,7 @@ export function ProvidersPage() {
     setProviderType('openai');
     setBaseUrl('');
     setApiKey('');
+    setCustomHeaders([]);
     setFormError('');
   };
 
@@ -101,6 +105,9 @@ export function ProvidersPage() {
         provider_type: providerType,
         base_url: baseUrl,
         api_key: apiKey,
+        custom_headers: customHeaders.length > 0
+          ? Object.fromEntries(customHeaders.filter(([k]) => k.trim()))
+          : null,
       });
       setDialogOpen(false);
       resetForm();
@@ -128,6 +135,8 @@ export function ProvidersPage() {
     setEditBaseUrl(p.base_url);
     setEditApiKey('');
     setEditError('');
+    const existing = p.config_json?.custom_headers ?? {};
+    setEditCustomHeaders(Object.entries(existing));
     setEditDialogOpen(true);
   };
 
@@ -136,11 +145,14 @@ export function ProvidersPage() {
     setEditError('');
     setEditSaving(true);
     try {
-      const body: Record<string, string> = {
+      const body: Record<string, unknown> = {
         display_name: editDisplayName,
         base_url: editBaseUrl,
       };
       if (editApiKey) body.api_key = editApiKey;
+      body.custom_headers = editCustomHeaders.length > 0
+        ? Object.fromEntries(editCustomHeaders.filter(([k]) => k.trim()))
+        : {};
       await apiPatch(`/api/admin/providers/${editProvider.id}`, body);
       setEditDialogOpen(false);
       setEditProvider(null);
@@ -164,7 +176,7 @@ export function ProvidersPage() {
             <Plus className="h-4 w-4" />
             {t('providers.addProvider')}
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{t('providers.addProvider')}</DialogTitle>
               <DialogDescription>{t('providers.dialogDescription')}</DialogDescription>
@@ -221,6 +233,24 @@ export function ProvidersPage() {
                 {providerType === 'bedrock' && (
                   <p className="text-xs text-muted-foreground">{t('providers.bedrockKeyHint', 'Format: ACCESS_KEY_ID:SECRET_ACCESS_KEY')}</p>
                 )}
+              </div>
+              <div className="space-y-2">
+                <Label>{t('providers.customHeaders')}</Label>
+                <p className="text-xs text-muted-foreground">{t('providers.customHeadersDesc')}</p>
+                {customHeaders.map(([k, v], i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <Input className="flex-1" placeholder="Header-Name" value={k}
+                      onChange={(e) => { const next = [...customHeaders]; next[i] = [e.target.value, v]; setCustomHeaders(next); }} />
+                    <Input className="flex-1" placeholder="value" value={v}
+                      onChange={(e) => { const next = [...customHeaders]; next[i] = [k, e.target.value]; setCustomHeaders(next); }} />
+                    <Button type="button" variant="ghost" size="icon-sm" onClick={() => setCustomHeaders(customHeaders.filter((_, j) => j !== i))}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={() => setCustomHeaders([...customHeaders, ['', '']])}>
+                  <Plus className="mr-1 h-3 w-3" />{t('providers.addHeader')}
+                </Button>
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={submitting}>
@@ -298,7 +328,7 @@ export function ProvidersPage() {
 
       {/* Edit Provider Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('providers.editProvider')}</DialogTitle>
             <DialogDescription>{t('providers.editDescription')}</DialogDescription>
@@ -318,6 +348,24 @@ export function ProvidersPage() {
             <div className="space-y-2">
               <Label>{t('providers.apiKey')}</Label>
               <Input type="password" value={editApiKey} onChange={(e) => setEditApiKey(e.target.value)} placeholder={t('providers.apiKeyUnchanged')} />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('providers.customHeaders')}</Label>
+              <p className="text-xs text-muted-foreground">{t('providers.customHeadersDesc')}</p>
+              {editCustomHeaders.map(([k, v], i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <Input className="flex-1" placeholder="Header-Name" value={k}
+                    onChange={(e) => { const next = [...editCustomHeaders]; next[i] = [e.target.value, v]; setEditCustomHeaders(next); }} />
+                  <Input className="flex-1" placeholder="value" value={v}
+                    onChange={(e) => { const next = [...editCustomHeaders]; next[i] = [k, e.target.value]; setEditCustomHeaders(next); }} />
+                  <Button type="button" variant="ghost" size="icon-sm" onClick={() => setEditCustomHeaders(editCustomHeaders.filter((_, j) => j !== i))}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+              <Button type="button" variant="outline" size="sm" onClick={() => setEditCustomHeaders([...editCustomHeaders, ['', '']])}>
+                <Plus className="mr-1 h-3 w-3" />{t('providers.addHeader')}
+              </Button>
             </div>
           </div>
           <DialogFooter>

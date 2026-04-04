@@ -22,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Trash2, Search, Pencil } from 'lucide-react';
+import { Plus, Trash2, Search, Pencil, X } from 'lucide-react';
 import { api, apiPost, apiPatch, apiDelete } from '@/lib/api';
 
 interface McpServer {
@@ -34,6 +34,7 @@ interface McpServer {
   status: string;
   last_health_check: string | null;
   tools_count: number;
+  config_json?: { custom_headers?: Record<string, string> };
   created_at: string;
 }
 
@@ -58,6 +59,7 @@ export function McpServersPage() {
   const [transportType, setTransportType] = useState('streamable_http');
   const [authType, setAuthType] = useState('none');
   const [authSecret, setAuthSecret] = useState('');
+  const [customHeaders, setCustomHeaders] = useState<[string, string][]>([]);
 
   // Edit state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -65,6 +67,7 @@ export function McpServersPage() {
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editEndpointUrl, setEditEndpointUrl] = useState('');
+  const [editCustomHeaders, setEditCustomHeaders] = useState<[string, string][]>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
 
@@ -88,6 +91,7 @@ export function McpServersPage() {
     setTransportType('streamable_http');
     setAuthType('none');
     setAuthSecret('');
+    setCustomHeaders([]);
     setFormError('');
   };
 
@@ -103,6 +107,9 @@ export function McpServersPage() {
         transport_type: transportType,
         auth_type: authType,
         auth_secret: authSecret || undefined,
+        custom_headers: customHeaders.length > 0
+          ? Object.fromEntries(customHeaders.filter(([k]) => k.trim()))
+          : null,
       });
       setDialogOpen(false);
       resetForm();
@@ -139,6 +146,8 @@ export function McpServersPage() {
     setEditDescription(s.description);
     setEditEndpointUrl(s.endpoint_url);
     setEditError('');
+    const existing = s.config_json?.custom_headers ?? {};
+    setEditCustomHeaders(Object.entries(existing));
     setEditDialogOpen(true);
   };
 
@@ -151,6 +160,9 @@ export function McpServersPage() {
         name: editName,
         description: editDescription,
         endpoint_url: editEndpointUrl,
+        custom_headers: editCustomHeaders.length > 0
+          ? Object.fromEntries(editCustomHeaders.filter(([k]) => k.trim()))
+          : {},
       });
       setEditDialogOpen(false);
       setEditServer(null);
@@ -174,7 +186,7 @@ export function McpServersPage() {
             <Plus className="h-4 w-4" />
             {t('mcpServers.registerServer')}
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{t('mcpServers.dialogTitle')}</DialogTitle>
               <DialogDescription>{t('mcpServers.dialogDescription')}</DialogDescription>
@@ -227,6 +239,24 @@ export function McpServersPage() {
                   <Input id="mcp-secret" type="password" value={authSecret} onChange={(e) => setAuthSecret(e.target.value)} placeholder="Secret or token" required />
                 </div>
               )}
+              <div className="space-y-2">
+                <Label>{t('providers.customHeaders')}</Label>
+                <p className="text-xs text-muted-foreground">{t('providers.customHeadersDesc')}</p>
+                {customHeaders.map(([k, v], i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <Input className="flex-1" placeholder="Header-Name" value={k}
+                      onChange={(e) => { const next = [...customHeaders]; next[i] = [e.target.value, v]; setCustomHeaders(next); }} />
+                    <Input className="flex-1" placeholder="value" value={v}
+                      onChange={(e) => { const next = [...customHeaders]; next[i] = [k, e.target.value]; setCustomHeaders(next); }} />
+                    <Button type="button" variant="ghost" size="icon-sm" onClick={() => setCustomHeaders(customHeaders.filter((_, j) => j !== i))}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={() => setCustomHeaders([...customHeaders, ['', '']])}>
+                  <Plus className="mr-1 h-3 w-3" />{t('providers.addHeader')}
+                </Button>
+              </div>
               <DialogFooter>
                 <Button type="submit" disabled={submitting}>
                   {submitting ? t('mcpServers.registering') : t('mcpServers.registerServer')}
@@ -306,7 +336,7 @@ export function McpServersPage() {
 
       {/* Edit MCP Server Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('mcpServers.editServer')}</DialogTitle>
             <DialogDescription>{t('mcpServers.editDescription')}</DialogDescription>
@@ -326,6 +356,24 @@ export function McpServersPage() {
             <div className="space-y-2">
               <Label htmlFor="edit-mcp-url">{t('mcpServers.endpointUrl')}</Label>
               <Input id="edit-mcp-url" value={editEndpointUrl} onChange={(e) => setEditEndpointUrl(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('providers.customHeaders')}</Label>
+              <p className="text-xs text-muted-foreground">{t('providers.customHeadersDesc')}</p>
+              {editCustomHeaders.map(([k, v], i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <Input className="flex-1" placeholder="Header-Name" value={k}
+                    onChange={(e) => { const next = [...editCustomHeaders]; next[i] = [e.target.value, v]; setEditCustomHeaders(next); }} />
+                  <Input className="flex-1" placeholder="value" value={v}
+                    onChange={(e) => { const next = [...editCustomHeaders]; next[i] = [k, e.target.value]; setEditCustomHeaders(next); }} />
+                  <Button type="button" variant="ghost" size="icon-sm" onClick={() => setEditCustomHeaders(editCustomHeaders.filter((_, j) => j !== i))}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+              <Button type="button" variant="outline" size="sm" onClick={() => setEditCustomHeaders([...editCustomHeaders, ['', '']])}>
+                <Plus className="mr-1 h-3 w-3" />{t('providers.addHeader')}
+              </Button>
             </div>
           </div>
           <DialogFooter>

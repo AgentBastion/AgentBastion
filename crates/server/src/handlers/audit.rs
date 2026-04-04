@@ -62,7 +62,7 @@ pub async fn list_audit_logs(
         .quickwit_url
         .as_deref()
         .ok_or_else(|| AppError::Internal(anyhow::anyhow!("Quickwit is not configured")))?;
-    query_quickwit(qw_url, &state.config.quickwit_index, &query).await
+    query_quickwit(qw_url, &state.config.quickwit_index, state.config.quickwit_bearer_token.as_deref(), &query).await
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +93,7 @@ struct QwHit {
 async fn query_quickwit(
     qw_url: &str,
     qw_index: &str,
+    bearer_token: Option<&str>,
     query: &AuditLogQuery,
 ) -> Result<Json<AuditLogResponse>, AppError> {
     let max_hits = query.limit.unwrap_or(50).min(200);
@@ -149,8 +150,12 @@ async fn query_quickwit(
     }
 
     let client = reqwest::Client::new();
+    let mut req = client.get(&url);
+    if let Some(token) = bearer_token {
+        req = req.header("Authorization", format!("Bearer {token}"));
+    }
     let resp =
-        client.get(&url).send().await.map_err(|e| {
+        req.send().await.map_err(|e| {
             AppError::Internal(anyhow::anyhow!("Quickwit search request failed: {e}"))
         })?;
 

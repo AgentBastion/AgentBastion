@@ -87,6 +87,8 @@ pub struct CreateProviderRequest {
     pub base_url: String,
     pub api_key: String,
     pub config: Option<serde_json::Value>,
+    /// Custom HTTP headers forwarded when proxying requests to this provider.
+    pub custom_headers: Option<std::collections::HashMap<String, String>>,
 }
 
 // --- MCP Server DTOs ---
@@ -99,6 +101,8 @@ pub struct CreateMcpServerRequest {
     pub transport_type: Option<String>,
     pub auth_type: Option<String>,
     pub auth_secret: Option<String>,
+    /// Custom HTTP headers forwarded when connecting to this MCP server.
+    pub custom_headers: Option<std::collections::HashMap<String, String>>,
 }
 
 // --- Pagination ---

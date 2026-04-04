@@ -120,7 +120,11 @@ pub async fn list_platform_logs(
     }
 
     let client = reqwest::Client::new();
-    let resp = client.get(&url).send().await.map_err(|e| {
+    let mut req = client.get(&url);
+    if let Some(ref token) = state.config.quickwit_bearer_token {
+        req = req.header("Authorization", format!("Bearer {token}"));
+    }
+    let resp = req.send().await.map_err(|e| {
         AppError::Internal(anyhow::anyhow!("Quickwit search failed: {e}"))
     })?;
 

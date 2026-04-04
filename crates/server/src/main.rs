@@ -58,8 +58,9 @@ async fn main() -> anyhow::Result<()> {
     if let Some(ref qw_url) = config.quickwit_url {
         let qw_url = qw_url.clone();
         let qw_index = config.quickwit_index.clone();
+        let qw_token = config.quickwit_bearer_token.clone();
         tokio::spawn(async move {
-            audit::ensure_quickwit_index(&qw_url, &qw_index).await;
+            audit::ensure_quickwit_index(&qw_url, &qw_index, qw_token.as_deref()).await;
         });
     }
 
