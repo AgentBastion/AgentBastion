@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -208,30 +209,26 @@ export function McpServersPage() {
                 <Input id="mcp-url" value={endpointUrl} onChange={(e) => setEndpointUrl(e.target.value)} placeholder="http://localhost:8081/mcp" required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="mcp-transport">{t('mcpServers.transportType')}</Label>
-                <select
-                  id="mcp-transport"
-                  value={transportType}
-                  onChange={(e) => setTransportType(e.target.value)}
-                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                >
-                  <option value="streamable_http">Streamable HTTP</option>
-                  <option value="sse">SSE</option>
-                  <option value="stdio">Stdio</option>
-                </select>
+                <Label>{t('mcpServers.transportType')}</Label>
+                <Select value={transportType} onValueChange={(v) => { if (v) setTransportType(v); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="streamable_http">Streamable HTTP</SelectItem>
+                    <SelectItem value="sse">SSE</SelectItem>
+                    <SelectItem value="stdio">Stdio</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="mcp-auth">{t('mcpServers.authType')}</Label>
-                <select
-                  id="mcp-auth"
-                  value={authType}
-                  onChange={(e) => setAuthType(e.target.value)}
-                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                >
-                  <option value="none">None</option>
-                  <option value="bearer">Bearer Token</option>
-                  <option value="api_key">API Key</option>
-                </select>
+                <Label>{t('mcpServers.authType')}</Label>
+                <Select value={authType} onValueChange={(v) => { if (v) setAuthType(v); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="bearer">Bearer Token</SelectItem>
+                    <SelectItem value="api_key">API Key</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               {authType !== 'none' && (
                 <div className="space-y-2">

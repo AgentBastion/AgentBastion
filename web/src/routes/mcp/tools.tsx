@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Wrench } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -65,18 +66,16 @@ export function McpToolsPage() {
       )}
 
       <div className="flex items-center gap-3">
-        <Label htmlFor="tool-filter">{t('mcpTools.filterByServer')}</Label>
-        <select
-          id="tool-filter"
-          value={filterServer}
-          onChange={(e) => setFilterServer(e.target.value)}
-          className="flex h-8 w-64 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-        >
-          <option value="">{t('mcpTools.allServers')}</option>
-          {servers.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
+        <Label>{t('mcpTools.filterByServer')}</Label>
+        <Select value={filterServer} onValueChange={(v) => setFilterServer(v ?? '')}>
+          <SelectTrigger className="w-64"><SelectValue placeholder={t('mcpTools.allServers')} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">{t('mcpTools.allServers')}</SelectItem>
+            {servers.map((s) => (
+              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {loading ? (

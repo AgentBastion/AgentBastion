@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Dialog,
   DialogContent,
@@ -320,19 +322,14 @@ export function LogForwardersPage() {
                 <>
                   <div>
                     <Label>传输协议</Label>
-                    <div className="flex gap-4 mt-1">
+                    <RadioGroup value={formSyslogProto} onValueChange={(v) => setFormSyslogProto(v as 'udp' | 'tcp')} className="flex gap-4 mt-1">
                       {(['udp', 'tcp'] as const).map((proto) => (
                         <label key={proto} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                          <input
-                            type="radio"
-                            name="syslog-proto"
-                            checked={formSyslogProto === proto}
-                            onChange={() => setFormSyslogProto(proto)}
-                          />
+                          <RadioGroupItem value={proto} />
                           {proto.toUpperCase()}
                         </label>
                       ))}
-                    </div>
+                    </RadioGroup>
                   </div>
                   <div>
                     <Label>{t('logForwarders.address')}</Label>
@@ -373,18 +370,16 @@ export function LogForwardersPage() {
 
               <div>
                 <Label>{t('logForwarders.logTypes')}</Label>
-                <div className="flex flex-wrap gap-2 mt-1">
+                <div className="flex flex-wrap gap-3 mt-1">
                   {['audit', 'gateway', 'mcp', 'platform'].map((lt) => (
                     <label key={lt} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={formLogTypes.has(lt)}
-                        onChange={() => {
+                        onCheckedChange={() => {
                           const next = new Set(formLogTypes);
                           if (next.has(lt)) next.delete(lt); else next.add(lt);
                           setFormLogTypes(next);
                         }}
-                        className="rounded"
                       />
                       {lt}
                     </label>
@@ -594,18 +589,16 @@ export function LogForwardersPage() {
 
             <div>
               <Label>{t('logForwarders.logTypes')}</Label>
-              <div className="flex flex-wrap gap-2 mt-1">
+              <div className="flex flex-wrap gap-3 mt-1">
                 {['audit', 'gateway', 'mcp', 'platform'].map((lt) => (
                   <label key={lt} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={editLogTypes.has(lt)}
-                      onChange={() => {
+                      onCheckedChange={() => {
                         const next = new Set(editLogTypes);
                         if (next.has(lt)) next.delete(lt); else next.add(lt);
                         setEditLogTypes(next);
                       }}
-                      className="rounded"
                     />
                     {lt}
                   </label>

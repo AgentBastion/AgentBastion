@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -138,12 +139,14 @@ export function GatewayLogsPage() {
             </div>
             <div>
               <Label className="text-xs">{t('logs.sortBy')}</Label>
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm">
-                <option value="created_at">{t('logs.timestamp')}</option>
-                <option value="cost_usd">{t('logs.cost')}</option>
-                <option value="latency_ms">{t('logs.latency')}</option>
-              </select>
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v ?? 'created_at')}>
+                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created_at">{t('logs.timestamp')}</SelectItem>
+                  <SelectItem value="cost_usd">{t('logs.cost')}</SelectItem>
+                  <SelectItem value="latency_ms">{t('logs.latency')}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="mt-3 flex justify-end">

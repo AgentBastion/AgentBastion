@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -148,18 +149,16 @@ export function UsersPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="user-role">{t('users.role')}</Label>
-                <select
-                  id="user-role"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                >
-                  <option value="super_admin">{t('users.roleSuperAdmin', 'Super Admin')}</option>
-                  <option value="admin">{t('users.roleAdmin', 'Admin')}</option>
-                  <option value="team_manager">{t('users.roleTeamManager', 'Team Manager')}</option>
-                  <option value="developer">{t('users.roleDeveloper', 'Developer')}</option>
-                  <option value="viewer">{t('users.roleViewer', 'Viewer')}</option>
-                </select>
+                <Select value={role} onValueChange={(v) => { if (v) setRole(v); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="super_admin">{t('users.roleSuperAdmin', 'Super Admin')}</SelectItem>
+                    <SelectItem value="admin">{t('users.roleAdmin', 'Admin')}</SelectItem>
+                    <SelectItem value="team_manager">{t('users.roleTeamManager', 'Team Manager')}</SelectItem>
+                    <SelectItem value="developer">{t('users.roleDeveloper', 'Developer')}</SelectItem>
+                    <SelectItem value="viewer">{t('users.roleViewer', 'Viewer')}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={submitting}>

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -114,12 +115,14 @@ export function McpLogsPage() {
             </div>
             <div>
               <Label className="text-xs">{t('mcpLogs.status')}</Label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)}
-                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm">
-                <option value="">{t('common.all')}</option>
-                <option value="success">Success</option>
-                <option value="error">Error</option>
-              </select>
+              <Select value={status} onValueChange={(v) => setStatus(v ?? '')}>
+                <SelectTrigger className="h-8"><SelectValue placeholder={t('common.all')} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">{t('common.all')}</SelectItem>
+                  <SelectItem value="success">Success</SelectItem>
+                  <SelectItem value="error">Error</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">{t('mcpLogs.user')}</Label>
@@ -135,11 +138,13 @@ export function McpLogsPage() {
             </div>
             <div>
               <Label className="text-xs">{t('logs.sortBy')}</Label>
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm">
-                <option value="created_at">{t('logs.timestamp')}</option>
-                <option value="duration_ms">{t('mcpLogs.duration')}</option>
-              </select>
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v ?? 'created_at')}>
+                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created_at">{t('logs.timestamp')}</SelectItem>
+                  <SelectItem value="duration_ms">{t('mcpLogs.duration')}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="mt-3 flex justify-end">

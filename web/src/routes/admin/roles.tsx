@@ -17,6 +17,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import { Shield, Plus, Pencil, Trash2, Copy, FileJson } from 'lucide-react';
 import { api, apiPost, apiPatch, apiDelete } from '@/lib/api';
 
@@ -290,7 +292,7 @@ export function RolesPage() {
     <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
       {allPermissions.map((perm) => (
         <label key={perm} className="flex items-center gap-1.5 text-xs cursor-pointer">
-          <input type="checkbox" checked={selected.has(perm)} onChange={() => onToggle(perm)} className="rounded" />
+          <Checkbox checked={selected.has(perm)} onCheckedChange={() => onToggle(perm)} />
           {perm}
         </label>
       ))}
@@ -311,7 +313,7 @@ export function RolesPage() {
       {/* Model constraints */}
       <div className="rounded-md border p-3 space-y-2">
         <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" checked={restrictModels} onChange={(e) => onRestrictModelsChange(e.target.checked)} className="rounded" />
+          <Checkbox checked={restrictModels} onCheckedChange={(v) => onRestrictModelsChange(!!v)} />
           <span className="font-medium">{t('roles.allowedModels')}</span>
         </label>
         <p className="text-xs text-muted-foreground">{t('roles.allowedModelsDesc')}</p>
@@ -320,7 +322,7 @@ export function RolesPage() {
             <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto">
               {availableModels.map((model) => (
                 <label key={model} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                  <input type="checkbox" checked={selectedModels.has(model)} onChange={() => onToggleModel(model)} className="rounded" />
+                  <Checkbox checked={selectedModels.has(model)} onCheckedChange={() => onToggleModel(model)} />
                   <span className="truncate">{model}</span>
                 </label>
               ))}
@@ -335,7 +337,7 @@ export function RolesPage() {
       {/* MCP server constraints */}
       <div className="rounded-md border p-3 space-y-2">
         <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" checked={restrictServers} onChange={(e) => onRestrictServersChange(e.target.checked)} className="rounded" />
+          <Checkbox checked={restrictServers} onCheckedChange={(v) => onRestrictServersChange(!!v)} />
           <span className="font-medium">{t('roles.allowedMcpServers')}</span>
         </label>
         <p className="text-xs text-muted-foreground">{t('roles.allowedMcpServersDesc')}</p>
@@ -344,7 +346,7 @@ export function RolesPage() {
             <div className="grid grid-cols-1 gap-1.5 max-h-32 overflow-y-auto">
               {availableServers.map((srv) => (
                 <label key={srv.id} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                  <input type="checkbox" checked={selectedServers.has(srv.id)} onChange={() => onToggleServer(srv.id)} className="rounded" />
+                  <Checkbox checked={selectedServers.has(srv.id)} onCheckedChange={() => onToggleServer(srv.id)} />
                   {srv.name}
                 </label>
               ))}
@@ -429,8 +431,8 @@ export function RolesPage() {
       <div>
         <Label className="text-sm font-medium">{t('roles.policyDocument')}</Label>
         <p className="text-xs text-muted-foreground mb-1.5">{t('roles.policyDocumentDesc')}</p>
-        <textarea
-          className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono shadow-sm min-h-[260px] resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        <Textarea
+          className="font-mono min-h-[260px] resize-y"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           spellCheck={false}

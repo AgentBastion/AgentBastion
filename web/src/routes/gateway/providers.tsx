@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -195,19 +196,17 @@ export function ProvidersPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="prov-type">{t('providers.providerType')}</Label>
-                <select
-                  id="prov-type"
-                  value={providerType}
-                  onChange={(e) => setProviderType(e.target.value)}
-                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                >
-                  <option value="openai">OpenAI</option>
-                  <option value="anthropic">Anthropic</option>
-                  <option value="google">Google Gemini</option>
-                  <option value="azure_openai">Azure OpenAI</option>
-                  <option value="bedrock">AWS Bedrock</option>
-                  <option value="custom">Custom (OpenAI-compatible)</option>
-                </select>
+                <Select value={providerType} onValueChange={(v) => setProviderType(v ?? 'openai')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai">OpenAI</SelectItem>
+                    <SelectItem value="anthropic">Anthropic</SelectItem>
+                    <SelectItem value="google">Google Gemini</SelectItem>
+                    <SelectItem value="azure_openai">Azure OpenAI</SelectItem>
+                    <SelectItem value="bedrock">AWS Bedrock</SelectItem>
+                    <SelectItem value="custom">Custom (OpenAI-compatible)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="prov-url">{t('providers.baseUrl')}</Label>
